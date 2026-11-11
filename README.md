@@ -4,6 +4,8 @@ A relaxing 3D sailing game that runs in a web browser, on a laptop or a phone.
 You sail a small sloop among Caribbean-style islands. The wind does the work;
 you choose how much sail to carry and where to point her.
 
+Play it: https://adambabin.github.io/sailing-game/
+
 ## Controls
 
 | Action | Keyboard | Touch |
@@ -45,6 +47,9 @@ Open it in your browser. The page reloads by itself whenever a file changes.
 
 `npm run build` produces a single self-contained file, `dist/index.html`, that
 can be hosted anywhere.
+
+Every change pushed to the `main` branch is built and published to the link
+above automatically (see `.github/workflows/pages.yml`).
 
 ## How it is built
 
