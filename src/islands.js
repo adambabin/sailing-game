@@ -17,19 +17,21 @@ const keepClear = []; // spots where no tree should grow, such as doorways
 export const DOCK_TOP = 1.43; // height of the dock planks above sea level
 
 // x, z: position in metres (north is -z). R: radius. H: height of the hills.
+// find: the curiosity hidden here (see finds.js): which one, and where, as a direction and a
+// fraction of the way from the island's centre (0) to its shore (1).
 // port: direction the dock points out to sea, in radians (0 = east, PI/2 = south).
 export const ISLANDS = [
-  { name: 'Port Marigold', x: 150, z: -560, R: 120, H: 38, port: Math.PI / 2 },
-  { name: 'Turtle Cay', x: -300, z: -330, R: 42, H: 6 },
-  { name: 'Gull Rock', x: 430, z: -190, R: 30, H: 15, lighthouse: true },
-  { name: 'Isla Hibiscus', x: -650, z: -950, R: 165, H: 72, port: 0.97 },
-  { name: 'Mango Key', x: 720, z: -1000, R: 70, H: 14, port: 2.2 },
-  { name: 'Saint Avelle', x: -900, z: 320, R: 130, H: 46, port: 0 },
-  { name: 'Coral Spit', x: 360, z: 620, R: 50, H: 6 },
-  { name: 'Lantern Isle', x: 1120, z: 220, R: 90, H: 30, lighthouse: true, port: 3.33 },
-  { name: 'The Twins', x: -210, z: 1100, R: 62, H: 20 },
-  { name: 'Little Twin', x: -70, z: 1195, R: 40, H: 12 },
-  { name: 'Windward Hat', x: 1500, z: -1700, R: 185, H: 95 },
+  { name: 'Port Marigold', x: 150, z: -560, R: 120, H: 38, port: Math.PI / 2, find: { kind: 'cannon', angle: 1.2, dist: 0.5 } },
+  { name: 'Turtle Cay', x: -300, z: -330, R: 42, H: 6, find: { kind: 'turtle', angle: 4.0, dist: 0.9 } },
+  { name: 'Gull Rock', x: 430, z: -190, R: 30, H: 15, lighthouse: true, find: { kind: 'nest', angle: 2.2, dist: 0.6 } },
+  { name: 'Isla Hibiscus', x: -650, z: -950, R: 165, H: 72, port: 0.97, find: { kind: 'ruin', angle: 0, dist: 0 } },
+  { name: 'Mango Key', x: 720, z: -1000, R: 70, H: 14, port: 2.2, find: { kind: 'swing', angle: 5.2, dist: 0.45 } },
+  { name: 'Saint Avelle', x: -900, z: 320, R: 130, H: 46, port: 0, find: { kind: 'bell', angle: 0.3, dist: 0.35 } },
+  { name: 'Coral Spit', x: 360, z: 620, R: 50, H: 6, find: { kind: 'wreck', angle: 3.6, dist: 0.9 } },
+  { name: 'Lantern Isle', x: 1120, z: 220, R: 90, H: 30, lighthouse: true, port: 3.33, find: { kind: 'telescope', angle: 0.4, dist: 0.09 } },
+  { name: 'The Twins', x: -210, z: 1100, R: 62, H: 20, find: { kind: 'chest', angle: 2.0, dist: 0.25 } },
+  { name: 'Little Twin', x: -70, z: 1195, R: 40, H: 12, find: { kind: 'bottle', angle: 1.0, dist: 0.93 } },
+  { name: 'Windward Hat', x: 1500, z: -1700, R: 185, H: 95, find: { kind: 'cairn', angle: 0, dist: 0 } },
 ];
 
 function rng(seed) {
@@ -328,6 +330,12 @@ export function createIslands() {
   const group = new THREE.Group();
   const palms = [], bushes = [];
   const clear = (x, z) => obstacles.every((o) => Math.hypot(x - o.x, z - o.z) > o.r + 2.5) && keepClear.every((o) => Math.hypot(x - o.x, z - o.z) > o.r);
+
+  for (const isl of ISLANDS) {
+    const d = coastRadius(isl, isl.find.angle) * isl.find.dist;
+    isl.findSpot = { x: isl.x + Math.cos(isl.find.angle) * d, z: isl.z + Math.sin(isl.find.angle) * d };
+    keepClear.push({ ...isl.findSpot, r: 6 });
+  }
 
   ISLANDS.forEach((isl, i) => {
     const r = rng(i * 131 + 7);

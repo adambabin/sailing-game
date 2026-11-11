@@ -10,6 +10,8 @@ export const save = {
   discovered: ['Port Marigold'], // islands seen up close
   rumoured: [], // islands heard about in a tavern
   visited: [], // ports where you have gone ashore
+  finds: [], // curiosities found, by island name
+  shells: [], // shells picked up
   owned: [], // paints and sail cloth bought, as "part:value"
   upgrades: {},
   ship: {}, // where the ship was left: position, heading, sail, anchor, time of day

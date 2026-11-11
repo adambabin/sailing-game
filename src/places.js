@@ -189,6 +189,13 @@ export function createPlaces(game) {
       builders[kind](isl);
       panel.hidden = false;
     },
+    // A simple card of text, used for curiosities found on the islands.
+    show(heading, paragraphs) {
+      open = { kind: 'card' };
+      title.textContent = heading;
+      body.replaceChildren(...paragraphs.map((t, i) => h('p', { className: i ? '' : 'quote' }, t)));
+      panel.hidden = false;
+    },
     close() {
       open = null;
       panel.hidden = true;

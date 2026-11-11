@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { paint, applyPaint } from './materials.js';
 import { buildPerson } from './people.js';
-import { terrainHeight, onDock, obstacles, DOCK_TOP } from './islands.js';
+import { terrainHeight, onDock, obstacles, coastRadius, DOCK_TOP } from './islands.js';
 
 const WALK_SPEED = 5, TURN_SPEED = 2.4;
 
@@ -26,7 +26,7 @@ export function createShore() {
   applyPaint(sailor.group);
   applyPaint(dinghy);
 
-  const state = { active: false, island: null, x: 0, y: 0, z: 0, heading: 0, stride: 0, moving: false, onWood: false };
+  const state = { active: false, island: null, boat: null, x: 0, y: 0, z: 0, heading: 0, stride: 0, moving: false, onWood: false };
 
   const walkable = (x, z) => {
     if (onDock(state.island, x, z)) return true;
@@ -39,28 +39,40 @@ export function createShore() {
     sailor: sailor.group,
     dinghy,
     state,
-    // Step onto the dock of `isl`.
-    land(isl) {
-      const p = isl.portInfo, s = state;
+    // Go ashore on `isl`: onto its dock if `useDock`, otherwise onto the beach nearest the ship.
+    land(isl, ship, useDock) {
+      const s = state;
       s.active = true;
       s.island = isl;
-      s.x = isl.x + p.ux * (p.end - 4);
-      s.z = isl.z + p.uz * (p.end - 4);
-      s.y = DOCK_TOP;
-      s.heading = Math.atan2(-p.ux, -p.uz); // facing the village
+      if (useDock) {
+        const p = isl.portInfo;
+        s.x = isl.x + p.ux * (p.end - 4);
+        s.z = isl.z + p.uz * (p.end - 4);
+        s.y = DOCK_TOP;
+        s.heading = Math.atan2(-p.ux, -p.uz); // facing the village
+        s.boat = { x: isl.x + p.ux * (p.end - 3), z: isl.z + p.uz * (p.end - 3), y: 0.6, reach: 7 };
+        dinghy.position.set(isl.x + p.ux * (p.end - 2) - p.uz * 2.9, 0.6, isl.z + p.uz * (p.end - 2) + p.ux * 2.9);
+      } else {
+        const th = Math.atan2(ship.z - isl.z, ship.x - isl.x), R = coastRadius(isl, th);
+        const ux = Math.cos(th), uz = Math.sin(th);
+        s.x = isl.x + ux * R * 0.93;
+        s.z = isl.z + uz * R * 0.93;
+        s.y = terrainHeight(s.x, s.z);
+        s.heading = Math.atan2(-ux, -uz); // facing inland
+        s.boat = { x: isl.x + ux * R * 0.96, z: isl.z + uz * R * 0.96, y: 0.95, reach: 6 };
+        dinghy.position.set(isl.x + ux * R * 0.985 - uz * 2.2, 0.95, isl.z + uz * R * 0.985 + ux * 2.2); // pulled up on the sand
+      }
       sailor.group.visible = dinghy.visible = true;
-      dinghy.position.set(isl.x + p.ux * (p.end - 2) - p.uz * 2.9, 0.6, isl.z + p.uz * (p.end - 2) + p.ux * 2.9);
       dinghy.rotation.y = s.heading;
     },
     leave() {
       state.active = false;
       sailor.group.visible = dinghy.visible = false;
     },
-    // Is the sailor standing at the seaward end of the dock, by the dinghy?
+    // Is the sailor standing by the rowing boat?
     atDinghy() {
-      const s = state, p = s.island.portInfo;
-      const along = (s.x - s.island.x) * p.ux + (s.z - s.island.z) * p.uz;
-      return onDock(s.island, s.x, s.z) && along > p.end - 9;
+      const s = state;
+      return Math.hypot(s.x - s.boat.x, s.z - s.boat.z) < s.boat.reach;
     },
     // Walk with the same keys as the ship: left/right turn, up/down walk. Returns true on each footstep.
     update(dt, held, frozen) {
@@ -92,7 +104,7 @@ export function createShore() {
       sailor.arms[1].rotation.x = swing * 0.8;
       sailor.group.position.set(s.x, s.y + (s.moving ? Math.abs(Math.cos(s.stride)) * 0.05 : 0), s.z);
       sailor.group.rotation.y = s.heading;
-      dinghy.position.y = 0.6 + Math.sin(performance.now() * 0.0015) * 0.06;
+      dinghy.position.y = s.boat.y + Math.sin(performance.now() * 0.0015) * 0.05;
       return stepped;
     },
   };

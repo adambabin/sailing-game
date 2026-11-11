@@ -3,6 +3,7 @@
 import { ISLANDS, coastRadius } from './islands.js';
 import { save, cargoCount } from './save.js';
 import { GOODS } from './trade.js';
+import { SHELLS_PER_ISLAND } from './finds.js';
 
 const WORLD = { x0: -1250, x1: 1850, z0: -2050, z1: 1450 }; // area the chart covers, in metres
 const NM = 1852;
@@ -51,6 +52,12 @@ export function createChart() {
         g.arc(X(isl.dock.x), Z(isl.dock.z), 2.6, 0, 7);
         g.fill();
       }
+      if (save.finds.includes(isl.name)) { // a little star where you found something
+        g.fillStyle = '#b03a2e';
+        g.font = '11px serif';
+        g.textAlign = 'center';
+        g.fillText('★', X(isl.findSpot.x), Z(isl.findSpot.z) + 4);
+      }
       g.fillStyle = known ? '#3d2a1a' : 'rgba(61, 42, 26, 0.65)';
       g.font = `${known ? '' : 'italic '}11px ${serif}`;
       g.textAlign = 'center';
@@ -91,6 +98,8 @@ export function createChart() {
       ['Sailed', (save.distance / NM).toFixed(1) + ' nautical miles'],
       ['Islands found', `${save.discovered.length} of ${ISLANDS.length}`],
       ['Ports visited', `${save.visited.length} of ${ports}`],
+      ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
+      ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
       ['Purse', save.coins + ' coins'],
       ['Hold', `${cargoCount()} of ${save.hold} crates` + (cargo ? ` (${cargo})` : '')],
     ];

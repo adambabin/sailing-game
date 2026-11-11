@@ -181,6 +181,12 @@ export function createAudio() {
       burst('lowpass', 1300, vol, 0.4);
       burst('bandpass', 3000, vol * 0.4, 0.3, ctx.currentTime + 0.03, 0.6);
     },
+    // A bronze bell: a few ringing tones that die away slowly.
+    bell() {
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      for (const [f, v, len] of [[392, 0.12, 4], [784, 0.06, 3], [1046, 0.04, 2.2], [1318, 0.025, 1.6]]) tone('sine', f, v, 0.005, len, fx, now);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;
