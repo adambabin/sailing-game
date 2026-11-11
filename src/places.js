@@ -3,6 +3,7 @@
 import { save, persist, cargoCount } from './save.js';
 import { GOODS, TAVERNS, buyPrice, sellPrice, bestRoute } from './trade.js';
 import { ISLANDS } from './islands.js';
+import { SHIP_TYPES } from './ship.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -156,6 +157,22 @@ export function createPlaces(game) {
       }
       rows.push(h('span', { className: 'label' }, PART_LABELS[key]), row);
     }
+    // The ships themselves: buy a bigger one, or change back to one you already own.
+    const ships = Object.entries(SHIP_TYPES).map(([id, t]) => {
+      const owned = save.ships.includes(id), current = game.ship.typeId === id;
+      const tooFull = cargoCount() > t.hold + (save.upgrades.hold ? 10 : 0);
+      return h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, t.name), h('span', { className: 'muted' }, ` holds ${t.hold} crates`), h('div', { className: 'muted' }, t.blurb)),
+        h('button', {
+          id: 'ship-' + id, disabled: current || tooFull || (!owned && save.coins < t.price),
+          onclick: () => {
+            if (!owned) { save.coins -= t.price; game.audio.coin(); }
+            game.setShip(id);
+            game.toast(owned ? `You take the ${t.name.toLowerCase()} out` : `The ${t.name.toLowerCase()} is yours`);
+            shipwright(isl);
+          },
+        }, current ? 'Your ship' : tooFull ? 'Hold too full' : owned ? 'Sail her' : `${t.price} coins`));
+    });
     const upgrades = UPGRADES.map((u) => {
       const has = !!save.upgrades[u.id];
       return h('div', { className: 'trade-row' },
@@ -175,6 +192,10 @@ export function createPlaces(game) {
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'shipwright')} wipes their hands and shows you what is in stock.`),
       purse(),
+      h('h3', {}, 'Ships'),
+      ...ships,
+      h('p', { className: 'muted' }, 'Ships you own are kept for you at every shipwright. Your paint goes with you.'),
+      h('h3', {}, 'Paint and fittings'),
       h('div', { className: 'look-rows' }, ...rows),
       h('p', { className: 'muted' }, `Ringed paints cost ${PAINT_COST} coins, once. Every shipwright stocks different ones.`),
       ...upgrades

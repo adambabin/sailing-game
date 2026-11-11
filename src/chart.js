@@ -4,6 +4,7 @@ import { ISLANDS, coastRadius } from './islands.js';
 import { save, cargoCount } from './save.js';
 import { GOODS } from './trade.js';
 import { SHELLS_PER_ISLAND } from './finds.js';
+import { SHIP_TYPES } from './ship.js';
 
 const WORLD = { x0: -1250, x1: 1850, z0: -2050, z1: 1450 }; // area the chart covers, in metres
 const NM = 1852;
@@ -94,6 +95,7 @@ export function createChart() {
     const ports = ISLANDS.filter((i) => i.portInfo).length;
     const cargo = GOODS.filter((x) => save.cargo[x.id]).map((x) => `${save.cargo[x.id]} ${x.name.toLowerCase()}`).join(', ');
     const rows = [
+      ['Ship', SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop'],
       ['Day', save.days],
       ['Sailed', (save.distance / NM).toFixed(1) + ' nautical miles'],
       ['Islands found', `${save.discovered.length} of ${ISLANDS.length}`],

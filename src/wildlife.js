@@ -189,7 +189,7 @@ export function createWildlife(waves, fx) {
       const leaving = pod.time < 0 || ship.speed < 1 || !openSea;
       dolphins.forEach((d, i) => {
         // Hold station off the bow; when they lose interest they peel away to the side.
-        const side = pod.side * (leaving ? 70 : 5 + i * 2.6), ahead = leaving ? 20 : 10 - i * 4.5 + Math.sin(time * 0.4 + i) * 2;
+        const side = pod.side * (leaving ? 70 : ship.halfBeam + 3 + i * 2.6), ahead = leaving ? 20 : ship.bow + 4 - i * 4.5 + Math.sin(time * 0.4 + i) * 2;
         const gx = ship.x + fxs * ahead - fzs * side, gz = ship.z + fzs * ahead + fxs * side;
         const k = Math.min(1, dt * (leaving ? 0.35 : 1.4));
         const px = d.x, pz = d.z;

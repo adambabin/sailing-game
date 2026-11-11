@@ -14,6 +14,8 @@ export const save = {
   shells: [], // shells picked up
   owned: [], // paints and sail cloth bought, as "part:value"
   upgrades: {},
+  ships: ['sloop'], // kinds of ship you own
+  shipType: 'sloop', // the one you are sailing
   ship: {}, // where the ship was left: position, heading, sail, anchor, time of day
   distance: 0, // metres sailed
   days: 1,

@@ -92,8 +92,8 @@ function updateWake(dt, time) {
     puffTimer += 0.32 / (s.speed + 1);
     const atBow = Math.random() < 0.4;
     const side = Math.random() < 0.5 ? -1 : 1;
-    const along = atBow ? 4.5 + Math.random() * 1.5 : -6.3;
-    const off = atBow ? side * (0.9 + Math.random() * 0.5) : (Math.random() - 0.5) * 1.6;
+    const along = atBow ? s.bow * 0.75 + Math.random() * 1.5 : s.stern - 1.3;
+    const off = atBow ? side * (s.halfBeam * 0.5 + Math.random() * 0.5) : (Math.random() - 0.5) * s.halfBeam;
     const p = puffs[puffNext++ % WAKE_N];
     p.x = s.x + fx * along + fz * off;
     p.z = s.z + fz * along - fx * off;
@@ -156,9 +156,20 @@ function applyLook() {
   try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
 }
 function applyUpgrades() {
-  save.hold = save.upgrades.hold ? 30 : 20;
+  save.hold = ship.type.hold + (save.upgrades.hold ? 10 : 0);
   ship.state.speedBonus = save.upgrades.sails ? 1.1 : 1;
 }
+// Change to another kind of ship you own (done at a shipwright).
+function setShip(id) {
+  ship.setType(id);
+  save.shipType = ship.typeId;
+  if (!save.ships.includes(ship.typeId)) save.ships.push(ship.typeId);
+  applyUpgrades();
+  cam.sailDist = ship.type.cam.dist;
+  if (!shore.state.active) cam.dist = ship.type.cam.dist;
+  persist();
+}
+ship.setType(save.ships.includes(save.shipType) ? save.shipType : 'sloop');
 applyLook();
 applyUpgrades();
 
@@ -192,7 +203,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t) });
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip });
 const chart = createChart();
 const chartBtn = document.getElementById('tool-chart');
 function toggleChart() {
@@ -217,7 +228,7 @@ function backToShip() {
   shore.leave();
   document.body.classList.remove('ashore');
   setPadLabels('Sails');
-  cam.dist = cam.sailDist || 34;
+  cam.dist = cam.sailDist || ship.type.cam.dist;
   cam.yaw = 0.5;
   cam.pitch = 0.24;
   showToast('Back aboard');
@@ -347,8 +358,8 @@ resetBtn.addEventListener('click', () => {
 document.getElementById('helpbtn').addEventListener('click', () => { help.hidden = !help.hidden; });
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom
-const cam = { yaw: 0.5, pitch: 0.24, dist: 34, follow: Math.PI, target: new THREE.Vector3(), lastDrag: -10 };
-const clampZoom = (d) => (shore.state.active ? THREE.MathUtils.clamp(d, 4, 45) : THREE.MathUtils.clamp(d, 14, 140));
+const cam = { yaw: 0.5, pitch: 0.24, dist: ship.type.cam.dist, follow: Math.PI, target: new THREE.Vector3(), lastDrag: -10 };
+const clampZoom = (d) => (shore.state.active ? THREE.MathUtils.clamp(d, 4, 45) : THREE.MathUtils.clamp(d, ship.type.cam.min, 160));
 const pointers = new Map();
 let pinch = 0;
 canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); pinch = 0; });
@@ -378,7 +389,7 @@ function updateCamera(dt, time, snap) {
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
   cam.follow += diff * (snap ? 1 : Math.min(1, dt * (w.active ? 2.5 : 1.2)));
   if (w.active) vPos.set(w.x, w.y + 1.9, w.z);
-  else vPos.set(s.x, 4 + s.y * 0.4, s.z);
+  else vPos.set(s.x, ship.type.cam.height + s.y * 0.4, s.z);
   cam.target.lerp(vPos, snap ? 1 : Math.min(1, dt * 6));
   const yaw = cam.follow + Math.PI + cam.yaw;
   const cp = Math.cos(cam.pitch);
