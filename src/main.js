@@ -7,7 +7,11 @@ import { createEnvironment, WEATHERS } from './environment.js';
 import { createWindFx } from './windfx.js';
 import { createOcean } from './ocean.js';
 import { createSky } from './sky.js';
-import { createIslands, ISLANDS, nightLights } from './islands.js';
+import { createIslands, ISLANDS, nightLights, terrainHeight } from './islands.js';
+import { createShore } from './shore.js';
+import { createPlaces, ALL_LOOK_VALUES } from './places.js';
+import { createChart } from './chart.js';
+import { save, persist } from './save.js';
 import { createShip, SHIP_COLORS } from './ship.js';
 import { createAudio, MODE_LABELS } from './audio.js';
 
@@ -42,7 +46,8 @@ const ocean = createOcean(waves, ISLANDS);
 const sky = createSky();
 const ship = createShip(waves);
 const windFx = createWindFx();
-scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain);
+const shore = createShore();
+scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy);
 applyPaint(scene);
 
 // Foam wake: small white patches that lie on the water, spread out and fade.
@@ -119,57 +124,22 @@ function applyEnvironment(dt) {
   sun.target.position.copy(ship.root.position);
 }
 
-// ---- Ship customisation -----------------------------------------------------------
-const LOOK_OPTIONS = {
-  hull: [0x2f6f8f, 0x1f2f45, 0x7a2f2a, 0x2f6b4a, 0x2b2b30, 0xe9e2cf, 0xd9a441],
-  trim: [0xf2d9a0, 0xffffff, 0xf0c05a, 0xd9453c, 0x23252b, 0x8fd0e8],
-  sail: [0xf6efdc, 0xffffff, 0xd9b98a, 0xc94a3a, 0x33486b, 0x34343a],
-  flag: [0xd9453c, 0xf0c05a, 0x3a78c9, 0x3aa66a, 0x1d1d22, 0xffffff],
-  pattern: ['plain', 'stripes', 'bands'],
-};
-const LOOK_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
+// ---- Ship look and upgrades (changed at a shipwright) ----------------------------
 const look = { hull: SHIP_COLORS.hull, trim: SHIP_COLORS.trim, sail: SHIP_COLORS.sail, flag: SHIP_COLORS.flag, pattern: 'plain' };
 try {
-  const saved = JSON.parse(localStorage.getItem('tradewind-look') || '{}');
-  for (const k in look) if (LOOK_OPTIONS[k].includes(saved[k])) look[k] = saved[k];
+  const stored = JSON.parse(localStorage.getItem('tradewind-look') || '{}');
+  for (const k in look) if (ALL_LOOK_VALUES[k].includes(stored[k])) look[k] = stored[k];
 } catch {}
-const yardRows = document.getElementById('shipyard-rows');
-function buildShipyard() {
-  yardRows.textContent = '';
-  for (const key in LOOK_OPTIONS) {
-    const label = document.createElement('span');
-    label.textContent = LOOK_LABELS[key];
-    const row = document.createElement('div');
-    row.className = 'swatches';
-    for (const value of LOOK_OPTIONS[key]) {
-      const b = document.createElement('button');
-      b.id = `look-${key}-${value}`;
-      b.setAttribute('aria-pressed', String(look[key] === value));
-      if (typeof value === 'number') {
-        b.style.background = '#' + value.toString(16).padStart(6, '0');
-        b.setAttribute('aria-label', `${LOOK_LABELS[key]} colour ${LOOK_OPTIONS[key].indexOf(value) + 1}`);
-      } else {
-        b.className = 'text';
-        b.textContent = value[0].toUpperCase() + value.slice(1);
-      }
-      b.addEventListener('click', () => {
-        look[key] = value;
-        ship.setLook(look);
-        try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
-        buildShipyard();
-      });
-      row.append(b);
-    }
-    yardRows.append(label, row);
-  }
+function applyLook() {
+  ship.setLook(look);
+  try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
 }
-ship.setLook(look);
-buildShipyard();
-const yard = document.getElementById('shipyard'), yardBtn = document.getElementById('tool-ship');
-yardBtn.addEventListener('click', () => {
-  yard.hidden = !yard.hidden;
-  yardBtn.setAttribute('aria-expanded', String(!yard.hidden));
-});
+function applyUpgrades() {
+  save.hold = save.upgrades.hold ? 30 : 20;
+  ship.state.speedBonus = save.upgrades.sails ? 1.1 : 1;
+}
+applyLook();
+applyUpgrades();
 
 // ---- Time and weather buttons (for previewing; both also change on their own) ---
 function skipTime() {
@@ -196,11 +166,82 @@ soundBtn.addEventListener('click', cycleSound);
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
 document.addEventListener('visibilitychange', () => audio.pause(document.hidden));
 
+// ---- Ports: going ashore, visiting places, the chart ------------------------------
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t) });
+const chart = createChart();
+const chartBtn = document.getElementById('tool-chart');
+function toggleChart() {
+  chartBtn.setAttribute('aria-expanded', String(chart.toggle(ship.state, wind)));
+}
+chartBtn.addEventListener('click', toggleChart);
+document.getElementById('chart-close').addEventListener('click', toggleChart);
+
+function goAshore(isl) {
+  shore.land(isl);
+  document.body.classList.add('ashore');
+  setPadLabels('Walk');
+  cam.sailDist = cam.dist;
+  cam.dist = 11;
+  cam.yaw = 0;
+  cam.pitch = 0.3;
+  if (!save.visited.includes(isl.name)) { save.visited.push(isl.name); persist(); }
+  showToast('Ashore at ' + isl.name);
+}
+function backToShip() {
+  places.close();
+  shore.leave();
+  document.body.classList.remove('ashore');
+  setPadLabels('Sails');
+  cam.dist = cam.sailDist || 34;
+  cam.yaw = 0.5;
+  cam.pitch = 0.24;
+  showToast('Back aboard');
+}
+
+// The one thing you can do right now, shown on the big button (and the E key).
+const walkLabels = document.querySelectorAll('#pad-right .stack small');
+const setPadLabels = (text) => walkLabels.forEach((e) => (e.textContent = text));
+const actionBtn = document.getElementById('action');
+let action = null, portNearby = null;
+function findAction() {
+  const s = ship.state;
+  if (places.isOpen) return null;
+  if (shore.state.active) {
+    const w = shore.state;
+    for (const p of w.island.portInfo.places) {
+      if (Math.hypot(w.x - p.doorX, w.z - p.doorZ) < 4.5) return { label: 'Visit the ' + p.label.toLowerCase(), run: () => places.open(w.island, p.kind) };
+    }
+    return shore.atDinghy() ? { label: 'Row back to the ship', run: backToShip } : null;
+  }
+  portNearby = ISLANDS.find((isl) => isl.portInfo && Math.hypot(s.x - isl.dock.x, s.z - isl.dock.z) < 110) || null;
+  if (portNearby && s.anchorDepth > 0.9 && Math.abs(s.speed) < 1) return { label: 'Go ashore at ' + portNearby.name, run: () => goAshore(portNearby) };
+  return null;
+}
+function doAction() {
+  if (action) action.run();
+}
+actionBtn.addEventListener('click', doAction);
+
+// Name tags that float over the places you can visit.
+const labelBox = document.getElementById('labels');
+const labelEls = ['Tavern', 'Shipwright', 'Market'].map((t) => labelBox.appendChild(Object.assign(document.createElement('div'), { className: 'place-label', textContent: t, hidden: true })));
+function updateLabels() {
+  const w = shore.state;
+  labelEls.forEach((elm, i) => {
+    const p = w.active && !places.isOpen ? w.island.portInfo.places.find((x) => x.label === elm.textContent) : null;
+    if (!p) { elm.hidden = true; return; }
+    vPos.set(p.x, p.y, p.z).project(camera);
+    elm.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
+    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+  });
+}
+
 // ---- Controls --------------------------------------------------------------------
 const held = { left: false, right: false, up: false, down: false };
 const KEYS = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down' };
 const anchorBtn = document.getElementById('btn-anchor');
 function toggleAnchor() {
+  if (shore.state.active) return;
   ship.state.anchorDown = !ship.state.anchorDown;
   audio.anchor(ship.state.anchorDown);
   anchorBtn.setAttribute('aria-pressed', String(ship.state.anchorDown));
@@ -212,7 +253,14 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyT') skipTime();
   else if (e.code === 'KeyR') cycleWeather();
   else if (e.code === 'KeyM') cycleSound();
-  else if (e.code === 'Enter' || e.code === 'Escape') closeHelp();
+  else if (e.code === 'KeyC') toggleChart();
+  else if (e.code === 'KeyE' && !e.repeat) doAction();
+  else if (e.code === 'Enter' || e.code === 'Escape') {
+    if (!help.hidden) closeHelp();
+    else if (places.isOpen) places.close();
+    else if (chart.isOpen) toggleChart();
+    else if (e.code === 'Enter') doAction();
+  }
 });
 window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
 window.addEventListener('blur', () => { for (const k in held) held[k] = false; });
@@ -231,6 +279,7 @@ document.getElementById('helpbtn').addEventListener('click', () => { help.hidden
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom
 const cam = { yaw: 0.5, pitch: 0.24, dist: 34, follow: Math.PI, target: new THREE.Vector3(), lastDrag: -10 };
+const clampZoom = (d) => (shore.state.active ? THREE.MathUtils.clamp(d, 4, 45) : THREE.MathUtils.clamp(d, 14, 140));
 const pointers = new Map();
 let pinch = 0;
 canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); pinch = 0; });
@@ -245,25 +294,28 @@ canvas.addEventListener('pointermove', (e) => {
   if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinch) cam.dist = THREE.MathUtils.clamp(cam.dist * (pinch / d), 14, 140);
+    if (pinch) cam.dist = clampZoom(cam.dist * (pinch / d));
     pinch = d;
   }
 });
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => { pointers.delete(e.pointerId); pinch = 0; });
-canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 14, 140); }, { passive: false });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = clampZoom(cam.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
 
 function updateCamera(dt, time, snap) {
-  const s = ship.state;
-  // Ease the camera round to stay behind the ship as she turns.
-  let diff = s.heading - cam.follow;
+  const s = ship.state, w = shore.state;
+  // Ease the camera round to stay behind the ship (or the sailor) as they turn.
+  const heading = w.active ? w.heading : s.heading;
+  let diff = heading - cam.follow;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  cam.follow += diff * (snap ? 1 : Math.min(1, dt * 1.2));
-  vPos.set(s.x, 4 + s.y * 0.4, s.z);
+  cam.follow += diff * (snap ? 1 : Math.min(1, dt * (w.active ? 2.5 : 1.2)));
+  if (w.active) vPos.set(w.x, w.y + 1.9, w.z);
+  else vPos.set(s.x, 4 + s.y * 0.4, s.z);
   cam.target.lerp(vPos, snap ? 1 : Math.min(1, dt * 6));
   const yaw = cam.follow + Math.PI + cam.yaw;
   const cp = Math.cos(cam.pitch);
   camera.position.set(cam.target.x + Math.sin(yaw) * cp * cam.dist, cam.target.y + Math.sin(cam.pitch) * cam.dist, cam.target.z + Math.cos(yaw) * cp * cam.dist);
-  const floor = waveHeight(waves, camera.position.x, camera.position.z, time) + 1.2;
+  // Keep the camera above both the waves and the land.
+  const floor = Math.max(waveHeight(waves, camera.position.x, camera.position.z, time) + 1.2, terrainHeight(camera.position.x, camera.position.z) + 1.2);
   if (camera.position.y < floor) camera.position.y = floor;
   camera.lookAt(cam.target);
 }
@@ -297,8 +349,10 @@ function updateHud(dt) {
   dialWind.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(s.relWind).toFixed(1)})`);
 
   let text = '', warn = false;
-  if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
-  else if (s.anchorDepth > 0.9) text = s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
+  if (shore.state.active) text = !action && !places.isOpen && shore.state.onWood ? 'Walk up into the village to find the tavern, shipwright and market.' : '';
+  else if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
+  else if (s.anchorDepth > 0.9) text = action ? '' : s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
+  else if (portNearby && s.speed < 6) text = 'Drop anchor here to go ashore at ' + portNearby.name + '.';
   else if (s.inIrons) { text = 'Pointing into the wind. Turn away until the sails fill.'; warn = true; }
   else if (s.sail < 0.05 && s.speed < 0.6) text = 'Raise the sails to get under way.';
   else if (wind.speed > 25 && s.sail > 0.75) text = 'Blowing hard. Lower some sail for a steadier ride.';
@@ -312,7 +366,12 @@ function updateHud(dt) {
     const d = Math.hypot(s.x - isl.x, s.z - isl.z);
     if (d < isl.R * 1.5 + 90) found = isl.name;
   }
-  if (found && found !== nearName) showToast(found);
+  if (found && found !== nearName && !shore.state.active) showToast(found);
+  if (found && !save.discovered.includes(found)) {
+    save.discovered.push(found);
+    save.rumoured = save.rumoured.filter((n) => n !== found);
+    persist();
+  }
   nearName = found;
 }
 
@@ -328,14 +387,25 @@ window.addEventListener('resize', resize);
 resize();
 
 const clock = new THREE.Clock();
-let time = 0, first = true;
+let time = 0, first = true, lastHour = env.hour, saveTimer = 15;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   time += dt;
   env.update(dt, time);
   updateWind(time);
-  const input = { steer: (held.right ? 1 : 0) - (held.left ? 1 : 0), sail: (held.up ? 1 : 0) - (held.down ? 1 : 0) };
+  const ashore = shore.state.active;
+  // On foot the same keys walk the sailor, and the ship rides quietly at anchor.
+  const input = ashore ? { steer: 0, sail: 0 } : { steer: (held.right ? 1 : 0) - (held.left ? 1 : 0), sail: (held.up ? 1 : 0) - (held.down ? 1 : 0) };
   ship.update(dt, time, input, wind);
+  if (ashore && shore.update(dt, held, places.isOpen)) audio.footstep(shore.state.onWood);
+  action = findAction();
+  actionBtn.hidden = !action;
+  if (action && actionBtn.textContent !== action.label) actionBtn.textContent = action.label;
+  // Logbook: distance sailed and days at sea.
+  save.distance += Math.abs(ship.state.speed) * dt;
+  if (env.hour < lastHour) save.days++;
+  lastHour = env.hour;
+  if ((saveTimer -= dt) <= 0) { saveTimer = 15; persist(); }
   updateCamera(dt, time, first);
   first = false;
   updateWake(dt, time);
@@ -344,6 +414,8 @@ function frame() {
   sky.update(camera, dt, env, wind);
   windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
+  updateLabels();
+  chart.update(dt, ship.state, wind);
   const st = ship.state;
   audio.update(dt, { wind: wind.speed, sea: sea.state, speed: st.speed, rain: env.rain, night: env.night, roll: st.roll, luffing: st.inIrons, nearLand: !!nearName });
   renderer.render(scene, camera);
@@ -353,7 +425,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio,
+  ship, wind, cam, env, audio, shore, places, save,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }

@@ -169,6 +169,17 @@ export function createAudio() {
         burst('bandpass', 2600, 0.12, 0.6, now + links * gap + 0.05, 0.6);
       }
     },
+    footstep(onWood) {
+      if (!ctx) return;
+      if (onWood) burst('bandpass', rand(260, 340), 0.22, 0.07, ctx.currentTime, 3); // a hollow knock on the planks
+      else burst('highpass', rand(1500, 2300), 0.035, 0.09); // a scuff of sand
+    },
+    coin() {
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      tone('sine', 2637, 0.05, 0.003, 0.25, fx, now);
+      tone('sine', 3520, 0.04, 0.003, 0.3, fx, now + 0.07);
+    },
     // Called every frame with what is happening in the world.
     update(dt, s) {
       if (!ctx || ctx.state !== 'running') return;

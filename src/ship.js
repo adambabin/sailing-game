@@ -277,7 +277,7 @@ export function createShip(waves) {
     const windRatio = wind.speed / 14;
     const windFactor = windRatio < 1 ? windRatio : Math.pow(windRatio, 0.6);
     s.inIrons = eff < 0.05 && s.sail > 0.15;
-    const target = s.anchorDepth > 0.9 ? 0 : MAX_SPEED * eff * s.sail * windFactor;
+    const target = s.anchorDepth > 0.9 ? 0 : MAX_SPEED * (s.speedBonus || 1) * eff * s.sail * windFactor;
     s.speed += (target - s.speed) * (target > s.speed ? 0.3 : 0.16) * dt;
     s.anchorDepth = THREE.MathUtils.clamp(s.anchorDepth + (s.anchorDown ? dt / 1.4 : -dt / 2), 0, 1);
     if (s.anchorDepth > 0.9) s.speed -= s.speed * Math.min(1, dt * 1.6);
