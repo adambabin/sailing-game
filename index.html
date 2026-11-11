@@ -68,6 +68,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 #chart-canvas { display: block; width: 100%; max-width: 310px; margin: 0 auto 12px; border-radius: 6px; }
 #chart-log { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }
 #chart-log dd { margin: 0; font-weight: 700; }
+#new-voyage { margin-top: 14px; color: var(--muted); }
 #action { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 3; max-width: calc(100vw - 300px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); }
 .place-label { position: fixed; top: 0; left: 0; padding: 3px 10px; border-radius: 7px; background: var(--panel); border: 1px solid var(--line); font-family: var(--display); font-size: 17px; pointer-events: none; white-space: nowrap; }
 .ashore #btn-anchor, .ashore #dial { display: none; }
@@ -147,6 +148,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   <div class="sheet-head"><h2>Chart and logbook</h2><button id="chart-close" class="close">Close</button></div>
   <canvas id="chart-canvas" aria-label="Sea chart of the islands you have found"></canvas>
   <dl id="chart-log"></dl>
+  <button id="new-voyage" class="close">Start a new voyage</button>
 </div>
 
 <div id="place" class="panel sheet" hidden>

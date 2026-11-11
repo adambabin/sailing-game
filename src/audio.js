@@ -174,6 +174,13 @@ export function createAudio() {
       if (onWood) burst('bandpass', rand(260, 340), 0.22, 0.07, ctx.currentTime, 3); // a hollow knock on the planks
       else burst('highpass', rand(1500, 2300), 0.035, 0.09); // a scuff of sand
     },
+    // A splash, quieter the further away it is.
+    splash(distance = 10) {
+      if (!ctx) return;
+      const vol = 0.2 / (1 + distance / 12);
+      burst('lowpass', 1300, vol, 0.4);
+      burst('bandpass', 3000, vol * 0.4, 0.3, ctx.currentTime + 0.03, 0.6);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;

@@ -9,9 +9,10 @@ import { createOcean } from './ocean.js';
 import { createSky } from './sky.js';
 import { createIslands, ISLANDS, nightLights, terrainHeight } from './islands.js';
 import { createShore } from './shore.js';
+import { createWildlife } from './wildlife.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
-import { save, persist } from './save.js';
+import { save, persist, wipe } from './save.js';
 import { createShip, SHIP_COLORS } from './ship.js';
 import { createAudio, MODE_LABELS } from './audio.js';
 
@@ -45,9 +46,20 @@ const islands = createIslands();
 const ocean = createOcean(waves, ISLANDS);
 const sky = createSky();
 const ship = createShip(waves);
+// Pick up where the last session left off, as long as that spot is still open water.
+if (save.ship.x !== undefined && terrainHeight(save.ship.x, save.ship.z) < -3) {
+  Object.assign(ship.state, { x: save.ship.x, z: save.ship.z, heading: save.ship.heading, sail: save.ship.sail, anchorDown: save.ship.anchor, anchorDepth: save.ship.anchor ? 1 : 0, speed: 0 });
+  env.hour = save.ship.hour;
+}
+function saveGame() {
+  const s = ship.state;
+  save.ship = { x: s.x, z: s.z, heading: s.heading, sail: s.sail, anchor: s.anchorDown, hour: env.hour };
+  persist();
+}
 const windFx = createWindFx();
 const shore = createShore();
-scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy);
+const wildlife = createWildlife(waves, { foam: foamAt, splash: (distance) => audio.splash(distance) });
+scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy, wildlife.group);
 applyPaint(scene);
 
 // Foam wake: small white patches that lie on the water, spread out and fade.
@@ -61,6 +73,10 @@ wake.frustumCulled = false;
 scene.add(wake);
 const puffs = Array.from({ length: WAKE_N }, () => ({ x: 0, z: 0, vx: 0, vz: 0, age: 99, life: 1, size: 1 }));
 let puffNext = 0, puffTimer = 0;
+// Drop a patch of foam on the water (used by dolphins and fish as well as the wake).
+function foamAt(x, z, size) {
+  Object.assign(puffs[puffNext++ % WAKE_N], { x, z, vx: 0, vz: 0, age: 0, life: 2.2, size });
+}
 const mtx = new THREE.Matrix4(), qTilt = new THREE.Quaternion(), vPos = new THREE.Vector3(), vScl = new THREE.Vector3();
 const vUp = new THREE.Vector3(0, 1, 0), vNrm = new THREE.Vector3();
 function updateWake(dt, time) {
@@ -164,7 +180,11 @@ function cycleSound() {
 }
 soundBtn.addEventListener('click', cycleSound);
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
-document.addEventListener('visibilitychange', () => audio.pause(document.hidden));
+document.addEventListener('visibilitychange', () => {
+  audio.pause(document.hidden);
+  if (document.hidden) saveGame();
+});
+window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
 const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t) });
@@ -271,10 +291,25 @@ document.querySelectorAll('[data-hold]').forEach((b) => {
   b.addEventListener('contextmenu', (e) => e.preventDefault());
 });
 anchorBtn.addEventListener('click', toggleAnchor);
+anchorBtn.setAttribute('aria-pressed', String(ship.state.anchorDown));
 
 const help = document.getElementById('help');
 function closeHelp() { help.hidden = true; }
 document.getElementById('help-go').addEventListener('click', closeHelp);
+if (save.distance > 100) document.getElementById('help-go').textContent = 'Continue your voyage';
+
+// Starting over wipes saved progress; the button asks twice because browsers' own pop-ups are not available here.
+const resetBtn = document.getElementById('new-voyage');
+resetBtn.addEventListener('click', () => {
+  if (resetBtn.dataset.sure) {
+    wipe();
+    location.reload();
+  } else {
+    resetBtn.dataset.sure = '1';
+    resetBtn.textContent = 'Really start over? Coins, cargo and chart will be lost';
+    setTimeout(() => { delete resetBtn.dataset.sure; resetBtn.textContent = 'Start a new voyage'; }, 5000);
+  }
+});
 document.getElementById('helpbtn').addEventListener('click', () => { help.hidden = !help.hidden; });
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom
@@ -405,9 +440,10 @@ function frame() {
   save.distance += Math.abs(ship.state.speed) * dt;
   if (env.hour < lastHour) save.days++;
   lastHour = env.hour;
-  if ((saveTimer -= dt) <= 0) { saveTimer = 15; persist(); }
+  if ((saveTimer -= dt) <= 0) { saveTimer = 10; saveGame(); }
   updateCamera(dt, time, first);
   first = false;
+  wildlife.update(dt, time, ship.state, env, camera);
   updateWake(dt, time);
   applyEnvironment(dt);
   ocean.update(time, camera, env);
@@ -425,7 +461,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, camera,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }

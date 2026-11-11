@@ -12,6 +12,7 @@ export const save = {
   visited: [], // ports where you have gone ashore
   owned: [], // paints and sail cloth bought, as "part:value"
   upgrades: {},
+  ship: {}, // where the ship was left: position, heading, sail, anchor, time of day
   distance: 0, // metres sailed
   days: 1,
 };
@@ -21,8 +22,16 @@ try {
   for (const k in save) if (typeof stored[k] === typeof save[k] && Array.isArray(stored[k]) === Array.isArray(save[k])) save[k] = stored[k];
 } catch {}
 
+let wiped = false;
 export function persist() {
+  if (wiped) return;
   try { localStorage.setItem(KEY, JSON.stringify(save)); } catch {}
 }
 
 export const cargoCount = () => Object.values(save.cargo).reduce((a, n) => a + n, 0);
+
+// Forget all progress. Nothing more is saved until the page reloads.
+export function wipe() {
+  wiped = true;
+  try { localStorage.removeItem(KEY); localStorage.removeItem('tradewind-look'); } catch {}
+}
