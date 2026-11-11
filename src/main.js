@@ -10,6 +10,7 @@ import { createSky } from './sky.js';
 import { createIslands, ISLANDS, nightLights, terrainHeight } from './islands.js';
 import { createShore } from './shore.js';
 import { createWildlife } from './wildlife.js';
+import { createPeople } from './people.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -60,6 +61,8 @@ const windFx = createWindFx();
 const shore = createShore();
 const wildlife = createWildlife(waves, { foam: foamAt, splash: (distance) => audio.splash(distance) });
 scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy, wildlife.group);
+const people = createPeople();
+scene.add(people.group);
 applyPaint(scene);
 
 // Foam wake: small white patches that lie on the water, spread out and fade.
@@ -221,6 +224,7 @@ function backToShip() {
 // The one thing you can do right now, shown on the big button (and the E key).
 const walkLabels = document.querySelectorAll('#pad-right .stack small');
 const setPadLabels = (text) => walkLabels.forEach((e) => (e.textContent = text));
+const KEEPER_ACTIONS = { tavern: 'Have a drink with ', market: 'Trade with ', shipwright: 'Talk ships with ' };
 const actionBtn = document.getElementById('action');
 let action = null, portNearby = null;
 function findAction() {
@@ -229,8 +233,10 @@ function findAction() {
   if (shore.state.active) {
     const w = shore.state;
     for (const p of w.island.portInfo.places) {
-      if (Math.hypot(w.x - p.doorX, w.z - p.doorZ) < 4.5) return { label: 'Visit the ' + p.label.toLowerCase(), run: () => places.open(w.island, p.kind) };
+      if (Math.hypot(w.x - p.doorX, w.z - p.doorZ) < 4.5 || Math.hypot(w.x - p.keeperX, w.z - p.keeperZ) < 3.6) return { label: KEEPER_ACTIONS[p.kind] + p.keeperName, run: () => places.open(w.island, p.kind) };
     }
+    const someone = people.nearby(w);
+    if (someone) return { label: someone.kind === 'fisher' ? 'Ask about the fishing' : 'Say hello', run: () => showToast('“' + people.greet(someone, env) + '”') };
     return shore.atDinghy() ? { label: 'Row back to the ship', run: backToShip } : null;
   }
   portNearby = ISLANDS.find((isl) => isl.portInfo && Math.hypot(s.x - isl.dock.x, s.z - isl.dock.z) < 110) || null;
@@ -444,6 +450,7 @@ function frame() {
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
+  people.update(dt, time, env, ashore ? shore.state : ship.state, ashore ? shore.state : null);
   updateWake(dt, time);
   applyEnvironment(dt);
   ocean.update(time, camera, env);
@@ -461,7 +468,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, camera,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, camera,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }

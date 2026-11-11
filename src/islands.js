@@ -248,9 +248,10 @@ function buildMarket(g) {
 }
 
 const PLACES = [
-  { kind: 'tavern', label: 'Tavern', build: buildTavern, angle: 0, dist: 0.76 },
-  { kind: 'shipwright', label: 'Shipwright', build: buildShipwright, angle: -0.3, dist: 0.86 },
-  { kind: 'market', label: 'Market', build: buildMarket, angle: 0.3, dist: 0.86 },
+  // keeper: where the person minding the place stands, measured across and forward from its centre.
+  { kind: 'tavern', label: 'Tavern', build: buildTavern, angle: 0, dist: 0.76, keeper: [-1.3, 4.5] },
+  { kind: 'shipwright', label: 'Shipwright', build: buildShipwright, angle: -0.3, dist: 0.86, keeper: [1.5, 1.6] },
+  { kind: 'market', label: 'Market', build: buildMarket, angle: 0.3, dist: 0.86, keeper: [0, 0.1] },
 ];
 
 function buildPort(group, isl, r) {
@@ -288,6 +289,7 @@ function buildPort(group, isl, r) {
       kind: p.kind, label: p.label,
       x: g.position.x, y: g.position.y + size.top, z: g.position.z,
       doorX: g.position.x + ux * size.door, doorZ: g.position.z + uz * size.door,
+      keeperX: g.position.x + uz * p.keeper[0] + ux * p.keeper[1], keeperZ: g.position.z - ux * p.keeper[0] + uz * p.keeper[1],
     };
   });
   keepClear.push({ x: isl.x + ux * (start - 5), z: isl.z + uz * (start - 5), r: 8 }); // the head of the dock

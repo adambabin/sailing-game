@@ -2,33 +2,12 @@
 
 import * as THREE from 'three';
 import { paint, applyPaint } from './materials.js';
+import { buildPerson } from './people.js';
 import { terrainHeight, onDock, obstacles, DOCK_TOP } from './islands.js';
 
 const WALK_SPEED = 5, TURN_SPEED = 2.4;
 
-function buildSailor() {
-  const g = new THREE.Group();
-  const part = (w, h, d, color, x, y, z) => {
-    const m = paint(new THREE.Mesh(new THREE.BoxGeometry(w, h, d)), color);
-    m.geometry.translate(0, -h / 2, 0); // hinge at the top, so limbs swing from hip and shoulder
-    m.position.set(x, y, z);
-    g.add(m);
-    return m;
-  };
-  const legs = [part(0.24, 0.85, 0.26, 0x2c3f63, 0.15, 0.85, 0), part(0.24, 0.85, 0.26, 0x2c3f63, -0.15, 0.85, 0)];
-  part(0.62, 0.75, 0.36, 0xf3efe2, 0, 1.6, 0); // shirt
-  part(0.64, 0.14, 0.38, 0xd9453c, 0, 0.98, 0); // sash
-  const arms = [part(0.18, 0.7, 0.2, 0xf3efe2, 0.41, 1.57, 0), part(0.18, 0.7, 0.2, 0xf3efe2, -0.41, 1.57, 0)];
-  const head = paint(new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8)), 0xd9a47a);
-  head.position.y = 1.86;
-  const brim = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.5, 0.05, 12)), 0xe6c36a);
-  brim.position.y = 2.02;
-  const crown = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.2, 10)), 0xe6c36a);
-  crown.position.y = 2.13;
-  g.add(head, brim, crown);
-  g.scale.setScalar(1.1);
-  return { group: g, legs, arms };
-}
+const buildSailor = () => buildPerson({ shirt: 0xf3efe2, trousers: 0x2c3f63, skin: 0xd9a47a, hat: 'straw', sash: 0xd9453c, scale: 1.1 });
 
 function buildDinghy() {
   const g = new THREE.Group();

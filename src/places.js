@@ -57,6 +57,8 @@ export function createPlaces(game) {
   const portIndex = (isl) => ISLANDS.filter((i) => i.portInfo).indexOf(isl);
   const purse = () => h('p', { className: 'purse' }, `${save.coins} coins · hold ${cargoCount()} of ${save.hold} crates`);
 
+  const keeper = (isl, kind) => isl.portInfo.places.find((p) => p.kind === kind).keeperName;
+
   function tavern(isl) {
     title.textContent = TAVERNS[isl.name] || 'The Tavern';
     const lines = [];
@@ -78,7 +80,7 @@ export function createPlaces(game) {
       persist();
     }
     body.replaceChildren(
-      h('p', { className: 'muted' }, 'The barkeep leans over and says:'),
+      h('p', { className: 'muted' }, `${keeper(isl, 'tavern')} leans over and says:`),
       h('p', { className: 'quote' }, '“' + text + '”'),
       h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another')
     );
@@ -108,7 +110,7 @@ export function createPlaces(game) {
           btn('sell', `Sell ${sell}`, -1, sell, have >= 1),
           btn('sellall', 'All', -have, sell, have >= 2)));
     });
-    body.replaceChildren(purse(), ...rows, h('p', { className: 'muted' }, 'Prices are per crate, in coins.'));
+    body.replaceChildren(h('p', { className: 'muted' }, `${keeper(isl, 'market')} keeps the stall. Prices are per crate, in coins.`), purse(), ...rows);
   }
 
   function shipwright(isl) {
@@ -171,6 +173,7 @@ export function createPlaces(game) {
         }, has ? 'Fitted' : `${u.cost} coins`));
     });
     body.replaceChildren(
+      h('p', { className: 'muted' }, `${keeper(isl, 'shipwright')} wipes their hands and shows you what is in stock.`),
       purse(),
       h('div', { className: 'look-rows' }, ...rows),
       h('p', { className: 'muted' }, `Ringed paints cost ${PAINT_COST} coins, once. Every shipwright stocks different ones.`),

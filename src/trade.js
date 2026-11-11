@@ -27,6 +27,15 @@ export const TAVERNS = {
   'Lantern Isle': 'The Lamp & Anchor',
 };
 
+// Who minds each place, port by port.
+export const KEEPERS = {
+  'Port Marigold': { tavern: 'Old Tomas', market: 'Marisol', shipwright: 'Henri' },
+  'Isla Hibiscus': { tavern: 'Rosalind', market: 'Bas', shipwright: 'Ines' },
+  'Mango Key': { tavern: 'Pelly', market: 'Auntie Jo', shipwright: 'Mateo' },
+  'Saint Avelle': { tavern: 'Father Luc', market: 'Celeste', shipwright: 'Anselm' },
+  'Lantern Isle': { tavern: 'Wick', market: 'Odile', shipwright: 'Corwin' },
+};
+
 function wobble(port, i, day) {
   const s = Math.sin(port.length * 12.9 + i * 78.2 + day * 37.7) * 43758.5453;
   return 0.92 + 0.16 * (s - Math.floor(s)); // prices drift a little from day to day
