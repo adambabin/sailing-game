@@ -7,6 +7,9 @@ import { paint } from './materials.js';
 
 export const MAX_ISLANDS = 12;
 
+// Lamps and windows that are switched on after dark.
+export const nightLights = [];
+
 // x, z: position in metres (north is -z). R: radius. H: height of the hills.
 // port: compass direction the dock faces, in radians (PI/2 = south).
 export const ISLANDS = [
@@ -149,13 +152,17 @@ function house(group, x, z, rot, r) {
   const walls = [0xfff4dc, 0xffe0a6, 0xf9c3ab, 0xc9e8e2, 0xfdf0c4];
   const y = terrainHeight(x, z);
   const w = 4.5 + r() * 2, d = 5 + r() * 2.5, h = 3.2 + r() * 1.2;
-  const body = paint(new THREE.Mesh(new THREE.BoxGeometry(w, h + 2, d)), walls[Math.floor(r() * walls.length)], { outline: 0.09 });
+  const body = paint(new THREE.Mesh(new THREE.BoxGeometry(w, h + 2, d)), walls[Math.floor(r() * walls.length)]);
   body.position.set(x, y + h / 2 - 1, z);
   body.rotation.y = rot;
-  const roof = paint(new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 2.4, 4)), 0xc8583a, { outline: 0.09 });
+  const roof = paint(new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 2.4, 4)), 0xc8583a);
   roof.position.set(x, y + h + 1.2, z);
   roof.rotation.y = rot + Math.PI / 4;
-  group.add(body, roof);
+  const win = paint(new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, 1.0, 1.1)), 0xffd98a, { glow: true });
+  win.position.set(x, y + h * 0.55, z);
+  win.rotation.y = rot;
+  nightLights.push(win);
+  group.add(body, roof, win);
 }
 
 function buildPort(group, isl, r) {
@@ -164,7 +171,7 @@ function buildPort(group, isl, r) {
   const shore = coastRadius(isl, th);
   const LEN = 34;
   const mid = shore * 0.96 + LEN / 2;
-  const dock = paint(new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.35, 3.6)), 0xa9794d, { outline: 0.07 });
+  const dock = paint(new THREE.Mesh(new THREE.BoxGeometry(LEN, 0.35, 3.6)), 0xa9794d);
   dock.position.set(isl.x + ux * mid, 1.25, isl.z + uz * mid);
   dock.rotation.y = -th;
   group.add(dock);
@@ -172,7 +179,7 @@ function buildPort(group, isl, r) {
   for (let i = 0; i < 6; i++) {
     for (const side of [-1, 1]) {
       const along = shore * 0.96 + 3 + i * 6;
-      const post = paint(new THREE.Mesh(postGeo), 0x6e4a2c, { outline: 0.05 });
+      const post = paint(new THREE.Mesh(postGeo), 0x6e4a2c);
       post.position.set(isl.x + ux * along - uz * side * 1.7, -0.6, isl.z + uz * along + ux * side * 1.7);
       group.add(post);
     }
@@ -187,13 +194,17 @@ function buildPort(group, isl, r) {
 
 function buildLighthouse(group, isl) {
   const y = terrainHeight(isl.x, isl.z);
-  const tower = paint(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.3, 13, 10)), 0xfbf6ea, { outline: 0.09 });
+  const tower = paint(new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.3, 13, 10)), 0xfbf6ea);
   tower.position.set(isl.x, y + 6, isl.z);
   const band = paint(new THREE.Mesh(new THREE.CylinderGeometry(1.92, 2.12, 3, 10)), 0xd9453c);
   band.position.set(isl.x, y + 5.5, isl.z);
   const lamp = paint(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 1.8, 10)), 0xfff0a0, { glow: true });
   lamp.position.set(isl.x, y + 13.4, isl.z);
-  const cap = paint(new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.8, 10)), 0xd9453c, { outline: 0.09 });
+  const beam = new THREE.PointLight(0xffe2a0, 0, 260, 1.2);
+  beam.position.copy(lamp.position);
+  nightLights.push(beam);
+  group.add(beam);
+  const cap = paint(new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.8, 10)), 0xd9453c);
   cap.position.set(isl.x, y + 15.2, isl.z);
   group.add(tower, band, lamp, cap);
 }

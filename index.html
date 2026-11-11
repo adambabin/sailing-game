@@ -36,15 +36,23 @@ body { background: var(--ink); color: var(--paper); font-family: var(--body); fo
 .gauge b span { font-size: 11px; font-weight: 700; color: var(--muted); margin-left: 2px; }
 
 #topright { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: var(--gap-r); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-#styles { display: flex; padding: 4px; gap: 4px; }
+#tools { display: flex; padding: 4px; gap: 4px; }
 button { font: inherit; color: var(--paper); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
-#styles button { padding: 7px 11px; border-radius: 7px; font-weight: 700; font-size: 13px; }
-#styles button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+#tools button { padding: 7px 11px; border-radius: 7px; font-weight: 700; font-size: 13px; }
+#tools button[aria-expanded="true"] { background: var(--paper); color: var(--ink); }
 #dial { width: 108px; padding: 6px 6px 4px; text-align: center; }
 #dial svg { display: block; width: 96px; height: 96px; margin: 0 auto; }
 #dial small { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 
+#shipyard { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: var(--gap-l); padding: 12px 14px; z-index: 4; max-width: calc(100vw - var(--gap-l) - var(--gap-r) - 28px); }
+#shipyard h2 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 0 0 8px; }
+#shipyard-rows { display: grid; grid-template-columns: auto 1fr; gap: 9px 12px; align-items: center; }
+#shipyard-rows > span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.swatches button.text { width: auto; border-radius: 7px; padding: 0 9px; font-size: 12px; font-weight: 700; }
+.swatches button[aria-pressed="true"] { border-color: var(--paper); box-shadow: 0 0 0 2px var(--paper); }
 #toast { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 8px 18px; font-family: var(--display); font-size: 20px; text-align: center; max-width: min(80vw, 420px); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
 #toast.show { opacity: 1; }
 #hint { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); padding: 7px 14px; font-weight: 700; text-align: center; max-width: 80vw; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
@@ -71,10 +79,12 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 #helpbtn { width: 34px; height: 34px; border-radius: 50%; font-weight: 800; }
 @media (max-width: 560px) {
   #gauges { gap: 10px; padding: 7px 10px; }
-  .gauge { min-width: 40px; }
+  .gauge { min-width: 34px; }
+  .gauge small { font-size: 9px; letter-spacing: 0.06em; }
   .gauge b { font-size: 15px; }
-  #styles button { padding: 6px 8px; font-size: 12px; }
+  #tools button { padding: 6px 8px; font-size: 12px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
+  #shipyard { top: calc(118px + env(safe-area-inset-top, 0px)); }
   #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
 }
 </style>
@@ -86,15 +96,16 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   <div class="gauge"><small>Speed</small><b><i id="g-speed" style="font-style:normal">0.0</i><span>kn</span></b></div>
   <div class="gauge"><small>Heading</small><b id="g-heading">N</b></div>
   <div class="gauge"><small>Sails</small><b><i id="g-sail" style="font-style:normal">0</i><span>%</span></b></div>
-  <div class="gauge"><small>Wind</small><b><i id="g-wind" style="font-style:normal">0</i><span>kn</span></b></div>
+  <div class="gauge"><small id="g-windname">Wind</small><b><i id="g-wind" style="font-style:normal">0</i><span>kn</span></b></div>
+  <div class="gauge"><small>Time</small><b id="g-time">12:00</b></div>
 </div>
 
 <div id="topright">
   <div style="display:flex;gap:8px;align-items:center">
-    <div id="styles" class="panel" role="group" aria-label="Art style">
-      <button id="style-lowpoly" data-style="lowpoly">Low-poly</button>
-      <button id="style-cartoon" data-style="cartoon">Cartoon</button>
-      <button id="style-painterly" data-style="painterly">Painterly</button>
+    <div id="tools" class="panel" role="group" aria-label="Game tools">
+      <button id="tool-ship" aria-expanded="false">Ship</button>
+      <button id="tool-time">Time</button>
+      <button id="tool-weather">Weather</button>
     </div>
     <button id="helpbtn" class="panel" aria-label="How to sail">?</button>
   </div>
@@ -109,6 +120,11 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
     </svg>
     <small>Wind</small>
   </div>
+</div>
+
+<div id="shipyard" class="panel" hidden>
+  <h2>Your ship</h2>
+  <div id="shipyard-rows"></div>
 </div>
 
 <div id="toast" class="panel"></div>
@@ -135,7 +151,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <dt>W / S or &#9650; &#9660;</dt><dd>Raise and lower the sails</dd>
       <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
       <dt>Drag, scroll</dt><dd>Look around and zoom</dd>
-      <dt>1 2 3</dt><dd>Switch art style</dd>
+      <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
     </dl>
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
     <button id="help-go" class="go">Set sail</button>

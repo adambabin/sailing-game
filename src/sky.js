@@ -1,7 +1,6 @@
-// Sky dome, sun and clouds.
+// Sky dome, sun, moon, stars and clouds.
 
 import * as THREE from 'three';
-import { paint } from './materials.js';
 
 const vertexShader = /* glsl */ `
 varying vec3 vDir;
@@ -12,16 +11,18 @@ void main() {
 `;
 
 const fragmentShader = /* glsl */ `
-uniform vec3 uZenith, uHorizon, uGlow, uSunDir, uSunColor;
-uniform float uGlowPower, uGlowStrength, uDiscSize, uDiscSoft;
+uniform vec3 uZenith, uHorizon, uGlow, uSunDir, uMoonDir, uLightDir, uSunColor;
+uniform float uGlowPower, uGlowStrength, uDisc, uNight;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
   float h = max(d.y, 0.0);
   vec3 col = mix(uHorizon, uZenith, pow(h, 0.55));
+  col += uGlow * pow(max(dot(d, uLightDir), 0.0), uGlowPower) * uGlowStrength;
   float s = max(dot(d, uSunDir), 0.0);
-  col += uGlow * pow(s, uGlowPower) * uGlowStrength;
-  col = mix(col, uSunColor * 1.15, smoothstep(uDiscSize, uDiscSize + uDiscSoft, s));
+  col = mix(col, uSunColor * 1.15, smoothstep(0.9992, 0.9998, s) * uDisc * (1.0 - uNight));
+  float m = max(dot(d, uMoonDir), 0.0);
+  col = mix(col, vec3(0.93, 0.95, 1.0), smoothstep(0.9994, 0.9996, m) * uDisc * uNight);
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }
@@ -37,12 +38,14 @@ export function createSky() {
     uZenith: { value: new THREE.Color() },
     uHorizon: { value: new THREE.Color() },
     uGlow: { value: new THREE.Color() },
-    uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunColor: { value: new THREE.Color() },
+    uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+    uMoonDir: { value: new THREE.Vector3(0, 1, 0) },
+    uLightDir: { value: new THREE.Vector3(0, 1, 0) },
     uGlowPower: { value: 8 },
     uGlowStrength: { value: 0.3 },
-    uDiscSize: { value: 0.9994 },
-    uDiscSoft: { value: 0.0003 },
+    uDisc: { value: 1 },
+    uNight: { value: 0 },
   };
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(9000, 32, 16),
@@ -51,19 +54,34 @@ export function createSky() {
   dome.frustumCulled = false;
   dome.renderOrder = -10;
 
-  // Clouds are clusters of squashed blobs, repainted per art style.
-  const clouds = new THREE.Group();
-  const blob = new THREE.IcosahedronGeometry(1, 1);
   const r = rng(11);
-  for (let i = 0; i < 16; i++) {
+
+  // Stars: points scattered over the upper sky, faded in at night.
+  const starPos = [];
+  for (let i = 0; i < 700; i++) {
+    const th = r() * Math.PI * 2, y = 0.03 + r() * 0.97, rad = Math.sqrt(1 - y * y);
+    starPos.push(Math.cos(th) * rad * 8500, y * 8500, Math.sin(th) * rad * 8500);
+  }
+  const stars = new THREE.Points(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3)),
+    new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false })
+  );
+  stars.frustumCulled = false;
+  stars.renderOrder = -9;
+
+  // Clouds are clusters of squashed blobs.
+  const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
+  const clouds = new THREE.Group();
+  const blob = new THREE.IcosahedronGeometry(1, 2);
+  for (let i = 0; i < 18; i++) {
     const cluster = new THREE.Group();
     const ang = r() * Math.PI * 2;
     const dist = 700 + r() * 2600;
-    cluster.position.set(Math.cos(ang) * dist, 260 + r() * 220, Math.sin(ang) * dist);
+    cluster.position.set(Math.cos(ang) * dist, 280 + r() * 220, Math.sin(ang) * dist);
     const size = 40 + r() * 50;
     const n = 4 + Math.floor(r() * 4);
     for (let j = 0; j < n; j++) {
-      const m = paint(new THREE.Mesh(blob), 0xffffff, { cloud: true });
+      const m = new THREE.Mesh(blob, cloudMat);
       const s = size * (0.6 + r() * 0.6);
       m.scale.set(s * 1.5, s * 0.55, s);
       m.position.set((j - n / 2) * size * 0.9 + r() * 20, r() * size * 0.25, (r() - 0.5) * size * 0.8);
@@ -73,28 +91,33 @@ export function createSky() {
   }
 
   return {
-    dome,
-    clouds,
-    setStyle(style) {
-      const s = style.sky;
-      uniforms.uZenith.value.set(s.zenith);
-      uniforms.uHorizon.value.set(s.horizon);
-      uniforms.uGlow.value.set(s.glow);
-      uniforms.uSunDir.value.set(...style.sunDir).normalize();
-      uniforms.uSunColor.value.set(style.sunColor);
-      uniforms.uGlowPower.value = s.glowPower;
-      uniforms.uGlowStrength.value = s.glowStrength;
-      uniforms.uDiscSize.value = s.discSize;
-      uniforms.uDiscSoft.value = s.discSoft;
-      clouds.traverse((o) => {
-        if (o.userData.paint) o.userData.paint.color = style.cloud;
-      });
-    },
-    update(camera, dt) {
+    dome, stars, clouds,
+    update(camera, dt, env, wind) {
+      uniforms.uZenith.value.copy(env.zenith);
+      uniforms.uHorizon.value.copy(env.horizon);
+      uniforms.uGlow.value.copy(env.glow);
+      uniforms.uSunColor.value.copy(env.light);
+      uniforms.uSunDir.value.copy(env.sunDir);
+      uniforms.uMoonDir.value.copy(env.moonDir);
+      uniforms.uLightDir.value.copy(env.lightDir);
+      uniforms.uGlowPower.value = env.glowPower;
+      uniforms.uGlowStrength.value = env.glowStrength;
+      uniforms.uDisc.value = env.discStrength;
+      uniforms.uNight.value = env.night;
       dome.position.copy(camera.position);
+      stars.position.copy(camera.position);
+      stars.material.opacity = env.night * (1 - env.overcast) * 0.9;
+      cloudMat.color.copy(env.cloud);
+      const grow = 1 + 1.5 * env.overcast; // storm clouds swell to cover the sky
+      const drift = wind.speed * 0.25 * dt;
       for (const c of clouds.children) {
-        c.position.x += dt * 2.2; // drift with the trade wind
+        c.scale.setScalar(grow);
+        c.position.x += wind.dx * drift;
+        c.position.z += wind.dz * drift;
         if (c.position.x - camera.position.x > 3600) c.position.x -= 7200;
+        if (c.position.x - camera.position.x < -3600) c.position.x += 7200;
+        if (c.position.z - camera.position.z > 3600) c.position.z -= 7200;
+        if (c.position.z - camera.position.z < -3600) c.position.z += 7200;
       }
     },
   };

@@ -1,13 +1,14 @@
 // Entry point: builds the world, reads the controls and runs the game loop.
 
 import * as THREE from 'three';
-import { STYLES, STYLE_ORDER } from './styles.js';
-import { applyStyle } from './materials.js';
-import { buildWaves, waveHeight } from './waves.js';
+import { applyPaint } from './materials.js';
+import { buildWaves, waveHeight, sea } from './waves.js';
+import { createEnvironment, WEATHERS } from './environment.js';
+import { createWindFx } from './windfx.js';
 import { createOcean } from './ocean.js';
 import { createSky } from './sky.js';
-import { createIslands, ISLANDS } from './islands.js';
-import { createShip } from './ship.js';
+import { createIslands, ISLANDS, nightLights } from './islands.js';
+import { createShip, SHIP_COLORS } from './ship.js';
 
 const canvas = document.getElementById('sea');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -21,14 +22,16 @@ const sun = new THREE.DirectionalLight(0xffffff, 2);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 1);
 scene.add(sun, sun.target, hemi);
 
-// ---- Wind: a steady trade wind that wanders a little ---------------------------
-const WIND_BASE = 0.29; // radians; the direction the wind blows toward
+// ---- Wind and weather -----------------------------------------------------------
+const WIND_BASE = 0.29; // radians; the direction the trade wind blows toward
 const wind = { dx: 1, dz: 0, speed: 13 };
+const env = createEnvironment();
 function updateWind(t) {
   const a = WIND_BASE + 0.22 * Math.sin(t * 0.013) + 0.09 * Math.sin(t * 0.031 + 1);
   wind.dx = Math.cos(a);
   wind.dz = Math.sin(a);
-  wind.speed = 13 + 2.5 * Math.sin(t * 0.021) + 1 * Math.sin(t * 0.07);
+  wind.speed = env.windSpeed;
+  sea.state = env.sea;
 }
 
 // ---- World -----------------------------------------------------------------------
@@ -37,7 +40,9 @@ const islands = createIslands();
 const ocean = createOcean(waves, ISLANDS);
 const sky = createSky();
 const ship = createShip(waves);
-scene.add(sky.dome, sky.clouds, islands, ocean.mesh, ship.root);
+const windFx = createWindFx();
+scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain);
+applyPaint(scene);
 
 // Foam wake: small white patches that lie on the water, spread out and fade.
 const WAKE_N = 160;
@@ -92,29 +97,91 @@ function updateWake(dt, time) {
   wake.instanceMatrix.needsUpdate = true;
 }
 
-// ---- Art styles ------------------------------------------------------------------
-let style = STYLES.lowpoly;
-function setStyle(id) {
-  style = STYLES[id] || STYLES.lowpoly;
-  sky.setStyle(style);
-  ocean.setStyle(style);
-  applyStyle(scene, style);
-  sun.color.set(style.sunColor);
-  sun.intensity = style.sunIntensity;
-  hemi.color.set(style.hemiSky);
-  hemi.groundColor.set(style.hemiGround);
-  hemi.intensity = style.hemiIntensity;
-  scene.fog.color.set(style.sky.horizon);
-  scene.fog.near = style.fog.near;
-  scene.fog.far = style.fog.far;
-  wake.material.color.set(style.water.foam);
-  document.querySelectorAll('#styles button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === style.id)));
-  try { localStorage.setItem('tradewind-style', style.id); } catch {}
+// ---- Light, sky and sea colours follow the clock and the weather ----------------
+function applyEnvironment(dt) {
+  sun.color.copy(env.light);
+  sun.intensity = env.lightIntensity;
+  hemi.color.copy(env.hemiSky);
+  hemi.groundColor.copy(env.hemiGround);
+  hemi.intensity = env.hemi * (1 - 0.25 * env.overcast);
+  scene.fog.color.copy(env.horizon);
+  scene.fog.near = env.fogNear;
+  scene.fog.far = env.fogFar;
+  wake.material.color.copy(env.foam);
+  ship.lanternLight.intensity = env.night * 10;
+  const lit = env.night > 0.35;
+  for (const l of nightLights) {
+    if (l.isLight) l.intensity = env.night * 900;
+    else l.visible = lit;
+  }
+  sun.position.copy(ship.root.position).addScaledVector(env.lightDir, 200);
+  sun.target.position.copy(ship.root.position);
 }
-document.querySelectorAll('#styles button').forEach((b) => b.addEventListener('click', () => setStyle(b.dataset.style)));
-let saved = null;
-try { saved = localStorage.getItem('tradewind-style'); } catch {}
-setStyle(saved || 'lowpoly');
+
+// ---- Ship customisation -----------------------------------------------------------
+const LOOK_OPTIONS = {
+  hull: [0x2f6f8f, 0x1f2f45, 0x7a2f2a, 0x2f6b4a, 0x2b2b30, 0xe9e2cf, 0xd9a441],
+  trim: [0xf2d9a0, 0xffffff, 0xf0c05a, 0xd9453c, 0x23252b, 0x8fd0e8],
+  sail: [0xf6efdc, 0xffffff, 0xd9b98a, 0xc94a3a, 0x33486b, 0x34343a],
+  flag: [0xd9453c, 0xf0c05a, 0x3a78c9, 0x3aa66a, 0x1d1d22, 0xffffff],
+  pattern: ['plain', 'stripes', 'bands'],
+};
+const LOOK_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
+const look = { hull: SHIP_COLORS.hull, trim: SHIP_COLORS.trim, sail: SHIP_COLORS.sail, flag: SHIP_COLORS.flag, pattern: 'plain' };
+try {
+  const saved = JSON.parse(localStorage.getItem('tradewind-look') || '{}');
+  for (const k in look) if (LOOK_OPTIONS[k].includes(saved[k])) look[k] = saved[k];
+} catch {}
+const yardRows = document.getElementById('shipyard-rows');
+function buildShipyard() {
+  yardRows.textContent = '';
+  for (const key in LOOK_OPTIONS) {
+    const label = document.createElement('span');
+    label.textContent = LOOK_LABELS[key];
+    const row = document.createElement('div');
+    row.className = 'swatches';
+    for (const value of LOOK_OPTIONS[key]) {
+      const b = document.createElement('button');
+      b.id = `look-${key}-${value}`;
+      b.setAttribute('aria-pressed', String(look[key] === value));
+      if (typeof value === 'number') {
+        b.style.background = '#' + value.toString(16).padStart(6, '0');
+        b.setAttribute('aria-label', `${LOOK_LABELS[key]} colour ${LOOK_OPTIONS[key].indexOf(value) + 1}`);
+      } else {
+        b.className = 'text';
+        b.textContent = value[0].toUpperCase() + value.slice(1);
+      }
+      b.addEventListener('click', () => {
+        look[key] = value;
+        ship.setLook(look);
+        try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
+        buildShipyard();
+      });
+      row.append(b);
+    }
+    yardRows.append(label, row);
+  }
+}
+ship.setLook(look);
+buildShipyard();
+const yard = document.getElementById('shipyard'), yardBtn = document.getElementById('tool-ship');
+yardBtn.addEventListener('click', () => {
+  yard.hidden = !yard.hidden;
+  yardBtn.setAttribute('aria-expanded', String(!yard.hidden));
+});
+
+// ---- Time and weather buttons (for previewing; both also change on their own) ---
+function skipTime() {
+  env.skip += 3;
+  showToast('Three hours pass');
+}
+function cycleWeather() {
+  env.forced = env.forced + 1 >= WEATHERS.length ? -1 : env.forced + 1;
+  if (env.forced < 0) env.hold = 0;
+  showToast(env.forced < 0 ? 'Weather: changing on its own' : 'Weather: ' + WEATHERS[env.forced].name);
+}
+document.getElementById('tool-time').addEventListener('click', skipTime);
+document.getElementById('tool-weather').addEventListener('click', cycleWeather);
 
 // ---- Controls --------------------------------------------------------------------
 const held = { left: false, right: false, up: false, down: false };
@@ -128,7 +195,8 @@ function toggleAnchor() {
 window.addEventListener('keydown', (e) => {
   if (KEYS[e.code]) { held[KEYS[e.code]] = true; e.preventDefault(); }
   else if (e.code === 'Space' && !e.repeat) { toggleAnchor(); e.preventDefault(); }
-  else if (e.code.startsWith('Digit')) { const id = STYLE_ORDER[+e.code.slice(5) - 1]; if (id) setStyle(id); }
+  else if (e.code === 'KeyT') skipTime();
+  else if (e.code === 'KeyR') cycleWeather();
   else if (e.code === 'Enter' || e.code === 'Escape') closeHelp();
 });
 window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
@@ -187,7 +255,7 @@ function updateCamera(dt, time, snap) {
 
 // ---- On-screen display -----------------------------------------------------------
 const el = (id) => document.getElementById(id);
-const gSpeed = el('g-speed'), gHeading = el('g-heading'), gSail = el('g-sail'), gWind = el('g-wind');
+const gSpeed = el('g-speed'), gHeading = el('g-heading'), gSail = el('g-sail'), gWind = el('g-wind'), gWindName = el('g-windname'), gTime = el('g-time');
 const dialWind = el('dial-wind'), toast = el('toast'), hint = el('hint');
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 let toastTimer = 0;
@@ -205,6 +273,12 @@ function updateHud(dt) {
   gHeading.textContent = POINTS[Math.round(deg / 45) % 8] + ' ' + String(Math.round(deg) % 360).padStart(3, '0') + '°';
   gSail.textContent = Math.round(s.sail * 100);
   gWind.textContent = Math.round(wind.speed);
+  gTime.textContent = env.clock();
+  const name = env.windName();
+  if (name !== gWindName.textContent) {
+    if (gWindName.textContent !== 'Wind') showToast(name === 'Gale' ? 'A gale is blowing in' : name === 'Light air' ? 'The wind is dying away' : name);
+    gWindName.textContent = name;
+  }
   dialWind.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(s.relWind).toFixed(1)})`);
 
   let text = '', warn = false;
@@ -212,6 +286,7 @@ function updateHud(dt) {
   else if (s.anchorDepth > 0.9) text = s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
   else if (s.inIrons) { text = 'Pointing into the wind. Turn away until the sails fill.'; warn = true; }
   else if (s.sail < 0.05 && s.speed < 0.6) text = 'Raise the sails to get under way.';
+  else if (wind.speed > 25 && s.sail > 0.75) text = 'Blowing hard. Lower some sail for a steadier ride.';
   hint.textContent = text || hint.textContent;
   hint.classList.toggle('show', !!text);
   hint.classList.toggle('warn', warn);
@@ -242,16 +317,17 @@ let time = 0, first = true;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   time += dt;
+  env.update(dt, time);
   updateWind(time);
   const input = { steer: (held.right ? 1 : 0) - (held.left ? 1 : 0), sail: (held.up ? 1 : 0) - (held.down ? 1 : 0) };
   ship.update(dt, time, input, wind);
   updateCamera(dt, time, first);
   first = false;
   updateWake(dt, time);
-  ocean.update(time, camera);
-  sky.update(camera, dt);
-  sun.position.copy(ship.root.position).addScaledVector(sun.target.position.set(...style.sunDir).normalize(), 200);
-  sun.target.position.copy(ship.root.position);
+  applyEnvironment(dt);
+  ocean.update(time, camera, env);
+  sky.update(camera, dt, env, wind);
+  windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -260,9 +336,9 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, setStyle,
+  ship, wind, cam, env,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateWind(time); ship.update(1 / 60, time, input, wind); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }
   },
 };

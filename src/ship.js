@@ -1,7 +1,7 @@
 // The sloop: how she looks (built from simple shapes in code) and how she sails.
 
 import * as THREE from 'three';
-import { paint } from './materials.js';
+import { paint, applyPaint, sailPattern } from './materials.js';
 import { waveHeight } from './waves.js';
 import { terrainHeight, nearestIsland } from './islands.js';
 
@@ -18,7 +18,7 @@ export const SHIP_COLORS = {
 };
 
 const KNOT = 0.5144; // metres per second in one knot
-const MAX_SPEED = 9.5; // m/s with full sail in a fresh breeze
+const MAX_SPEED = 8; // m/s with full sail in a fair 14-knot breeze
 
 // How well the ship sails at each angle to the wind (degrees off the wind -> efficiency).
 const POLAR = [[0, 0], [28, 0], [45, 0.55], [60, 0.8], [90, 0.97], [115, 1], [150, 0.88], [180, 0.78]];
@@ -43,8 +43,8 @@ function setSpar(mesh, a, b) {
   mesh.scale.set(1, len, 1);
   mesh.quaternion.setFromUnitVectors(Y, tmpC.divideScalar(len));
 }
-function spar(a, b, radius, color, outline = 0.04) {
-  const mesh = paint(new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.8, radius, 1, 8)), color, { outline });
+function spar(a, b, radius, color) {
+  const mesh = paint(new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.8, radius, 1, 8)), color);
   setSpar(mesh, a, b);
   return mesh;
 }
@@ -65,7 +65,7 @@ function hullPoint(t, k, side, out) {
 }
 
 // One band of hull planking between heights k0 and k1 (0 = keel, 1 = gunwale).
-function hullBand(k0, k1, rows, color) {
+function hullBand(k0, k1, rows, color, part) {
   const STATIONS = 16;
   const pos = [], idx = [];
   const p = new THREE.Vector3();
@@ -107,7 +107,7 @@ function hullBand(k0, k1, rows, color) {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  return paint(new THREE.Mesh(geo), color, { double: true, outline: 0.05 });
+  return paint(new THREE.Mesh(geo), color, { double: true, part });
 }
 
 function deckMesh() {
@@ -144,7 +144,10 @@ function sailMesh(color) {
     }
   }
   geo.setIndex(idx);
-  const mesh = paint(new THREE.Mesh(geo), color, { double: true });
+  const uv = [];
+  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) uv.push(i / n, j / n);
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  const mesh = paint(new THREE.Mesh(geo), color, { double: true, part: 'sail' });
   mesh.frustumCulled = false;
   return mesh;
 }
@@ -166,27 +169,30 @@ export function createShip(waves) {
   root.rotation.order = 'YXZ';
   const C = SHIP_COLORS;
 
-  root.add(hullBand(0, 0.6, 4, C.bottom), hullBand(0.6, 0.9, 3, C.hull), hullBand(0.9, 1, 1, C.trim), deckMesh());
+  root.add(hullBand(0, 0.6, 4, C.bottom), hullBand(0.6, 0.9, 3, C.hull, 'hull'), hullBand(0.9, 1, 1, C.trim, 'trim'), deckMesh());
 
   // Mast, bowsprit and cabin.
   const MAST_Z = 1.5, MAST_TOP = 15.2;
   root.add(spar(V(0, 0.9, MAST_Z), V(0, MAST_TOP, MAST_Z), 0.19, C.wood));
   root.add(spar(V(0, 1.75, 5.6), V(0, 2.6, 10.8), 0.13, C.wood));
-  const cabin = paint(new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 2.9)), C.cabin, { outline: 0.05 });
+  const cabin = paint(new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 2.9)), C.cabin);
   cabin.position.set(0, 1.55, -2.3);
-  const cabinRoof = paint(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 3.2)), C.wood, { outline: 0.05 });
+  const cabinRoof = paint(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 3.2)), C.wood);
   cabinRoof.position.set(0, 2.12, -2.3);
   root.add(cabin, cabinRoof);
   for (const [x, z] of [[0.9, 3.4], [-0.75, 4.1]]) {
-    const barrel = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.75, 8)), C.wood, { outline: 0.04 });
+    const barrel = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.75, 8)), C.wood);
     barrel.position.set(x, 1.45, z);
     root.add(barrel);
   }
   const lantern = paint(new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6)), 0xffe9a0, { glow: true });
   lantern.position.set(0, 2.55, -5.7);
-  root.add(lantern, spar(V(0, 1.4, -5.7), V(0, 2.45, -5.7), 0.05, C.wood, 0.03));
+  root.add(lantern, spar(V(0, 1.4, -5.7), V(0, 2.45, -5.7), 0.05, C.wood));
+  const lanternLight = new THREE.PointLight(0xffc878, 0, 30, 1.5);
+  lanternLight.position.set(0, 2.9, -5.2);
+  root.add(lanternLight);
 
-  const rudder = paint(new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.0, 0.9)), C.wood, { outline: 0.04 });
+  const rudder = paint(new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.0, 0.9)), C.wood);
   rudder.geometry.translate(0, 0, -0.45);
   rudder.position.set(0, -0.1, Z0);
   root.add(rudder);
@@ -204,7 +210,7 @@ export function createShip(waves) {
   boom.add(spar(V(0, 0, -0.2), V(0, 0.15, -7.1), 0.12, C.wood));
   const gaff = spar(V(0, 1, 0), V(0, 2, -1), 0.1, C.wood);
   const mainsail = sailMesh(C.sail);
-  const furled = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 6.2, 8)), C.sail, { outline: 0.04 });
+  const furled = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 6.2, 8)), C.sail, { part: 'sail' });
   furled.rotation.x = Math.PI / 2;
   furled.position.set(0, 0.45, -3.6);
   boom.add(gaff, mainsail, furled);
@@ -216,7 +222,7 @@ export function createShip(waves) {
   // Pennant at the masthead.
   const flagGeo = new THREE.PlaneGeometry(2.4, 0.9, 8, 1);
   flagGeo.translate(1.2, 0, 0);
-  const flag = paint(new THREE.Mesh(flagGeo), C.flag, { double: true });
+  const flag = paint(new THREE.Mesh(flagGeo), C.flag, { double: true, part: 'flag' });
   flag.position.set(0, MAST_TOP - 0.2, MAST_Z);
   const flagBase = flagGeo.attributes.position.clone();
   root.add(flag);
@@ -230,7 +236,7 @@ export function createShip(waves) {
   arms.position.y = -0.15;
   anchor.add(arms);
   const ANCHOR_HOME = V(-1.25, 1.35, 5.2);
-  const cable = spar(V(0, 0, 0), V(0, 1, 0), 0.045, 0x3a2f28, 0);
+  const cable = spar(V(0, 0, 0), V(0, 1, 0), 0.045, 0x3a2f28);
   root.add(anchor, cable);
 
   const state = {
@@ -267,13 +273,16 @@ export function createShip(waves) {
 
     // --- Wind drives the ship
     const eff = polar(s.windAngle);
-    const windFactor = wind.speed / 14;
+    // Stronger wind gives more drive, with diminishing returns so a gale is fast but not absurd.
+    const windRatio = wind.speed / 14;
+    const windFactor = windRatio < 1 ? windRatio : Math.pow(windRatio, 0.6);
     s.inIrons = eff < 0.05 && s.sail > 0.15;
     const target = s.anchorDepth > 0.9 ? 0 : MAX_SPEED * eff * s.sail * windFactor;
     s.speed += (target - s.speed) * (target > s.speed ? 0.3 : 0.16) * dt;
     s.anchorDepth = THREE.MathUtils.clamp(s.anchorDepth + (s.anchorDown ? dt / 1.4 : -dt / 2), 0, 1);
     if (s.anchorDepth > 0.9) s.speed -= s.speed * Math.min(1, dt * 1.6);
-    s.fill += ((eff > 0.05 ? 1 : 0) * Math.min(1, windFactor) - s.fill) * Math.min(1, dt * 2);
+    // How hard the wind presses the sails: slack in light air, bellied out taut in a blow.
+    s.fill += ((eff > 0.05 ? THREE.MathUtils.clamp(wind.speed / 14, 0.25, 1.7) : 0) - s.fill) * Math.min(1, dt * 2);
 
     // --- Steering: the rudder needs water flowing past it to bite
     const bite = 0.22 + 0.78 * Math.min(1, Math.abs(s.speed) / 4);
@@ -307,7 +316,7 @@ export function createShip(waves) {
     const k = Math.min(1, dt * 5);
     s.y += ((hBow + hStern + hPort + hStbd + 2 * hMid) / 6 - s.y) * k;
     s.pitch += (-Math.atan2(hBow - hStern, 11) * 0.85 - s.pitch) * k;
-    const heel = s.tack * Math.sin(THREE.MathUtils.degToRad(s.windAngle)) * s.sail * s.fill * Math.min(1.3, windFactor) * 0.2;
+    const heel = s.tack * Math.sin(THREE.MathUtils.degToRad(s.windAngle)) * s.sail * s.fill * 0.19;
     const lean = -turn * Math.min(1, s.speed / 6) * 0.12;
     s.roll += (Math.atan2(hPort - hStbd, 3.8) * 0.6 + heel + lean - s.roll) * Math.min(1, dt * 3);
 
@@ -319,8 +328,8 @@ export function createShip(waves) {
     const r = s.sail;
     const ease = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(s.windAngle) * 0.5 - 0.1, 0.08, 1.4) * Math.min(1, r * 3);
     boom.rotation.y = ease * s.tack;
-    const luff = s.inIrons ? 1 : 0;
-    const belly = -s.tack * (0.25 + 0.75 * s.fill);
+    const luff = s.inIrons ? 1 : 0.35 * Math.max(0, 1 - wind.speed / 9); // sails flap in irons and hang slack in light air
+    const belly = -s.tack * (0.15 + 0.85 * s.fill);
 
     mainsail.visible = gaff.visible = r > 0.03;
     furled.visible = r < 0.6;
@@ -366,10 +375,24 @@ export function createShip(waves) {
     if (cable.visible) setSpar(cable, tmpA.set(ANCHOR_HOME.x, ANCHOR_HOME.y + 0.3, ANCHOR_HOME.z), tmpB.copy(anchor.position).setY(anchor.position.y + 0.5));
   }
 
+  // Repaint the ship. `look` holds colours for hull, trim, sail and flag, plus a sail pattern.
+  function setLook(look) {
+    const map = look.pattern && look.pattern !== 'plain' ? sailPattern(look.pattern, look.flag) : null;
+    root.traverse((o) => {
+      const p = o.userData.paint;
+      if (!p || !p.part) return;
+      p.color = look[p.part];
+      if (p.part === 'sail' && o !== furled) p.map = map;
+    });
+    applyPaint(root);
+  }
+
   return {
     root,
     state,
     update,
+    setLook,
+    lanternLight,
     get knots() {
       return state.speed / KNOT;
     },

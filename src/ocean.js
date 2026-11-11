@@ -2,7 +2,7 @@
 // card bends it into waves every frame using the same maths as waves.js.
 
 import * as THREE from 'three';
-import { WAVE_COUNT } from './waves.js';
+import { WAVE_COUNT, sea } from './waves.js';
 import { MAX_ISLANDS } from './islands.js';
 
 const CELL = 2.5; // metres between grid points near the ship
@@ -202,10 +202,10 @@ export function createOcean(waves, islands) {
     uHorizon: { value: new THREE.Color() },
     uFlat: { value: 0 },
     uBands: { value: 0 },
-    uFresnel: { value: 0.5 },
+    uFresnel: { value: 0.85 },
     uSpec: { value: 0.5 },
-    uShine: { value: 60 },
-    uRipple: { value: 0 },
+    uShine: { value: 90 },
+    uRipple: { value: 0.16 },
     uFoamAmt: { value: 0.2 },
     uFogNear: { value: 500 },
     uFogFar: { value: 5000 },
@@ -216,28 +216,21 @@ export function createOcean(waves, islands) {
 
   return {
     mesh,
-    setStyle(style) {
-      const w = style.water;
-      uniforms.uDeep.value.set(w.deep);
-      uniforms.uMid.value.set(w.mid);
-      uniforms.uShallow.value.set(w.shallow);
-      uniforms.uFoam.value.set(w.foam);
-      uniforms.uSunDir.value.set(...style.sunDir).normalize();
-      uniforms.uSunColor.value.set(style.sunColor);
-      uniforms.uZenith.value.set(style.sky.zenith);
-      uniforms.uHorizon.value.set(style.sky.horizon);
-      uniforms.uFlat.value = w.flat;
-      uniforms.uBands.value = w.bands;
-      uniforms.uFresnel.value = w.fresnel;
-      uniforms.uSpec.value = w.spec;
-      uniforms.uShine.value = w.shine;
-      uniforms.uRipple.value = w.ripple;
-      uniforms.uFoamAmt.value = w.foamAmt;
-      uniforms.uFogNear.value = style.fog.near;
-      uniforms.uFogFar.value = style.fog.far;
-    },
-    update(time, camera) {
+    update(time, camera, env) {
       uniforms.uTime.value = time;
+      uniforms.uSea.value = sea.state;
+      uniforms.uDeep.value.copy(env.deep);
+      uniforms.uMid.value.copy(env.mid);
+      uniforms.uShallow.value.copy(env.shallow);
+      uniforms.uFoam.value.copy(env.foam);
+      uniforms.uSunDir.value.copy(env.lightDir);
+      uniforms.uSunColor.value.copy(env.light);
+      uniforms.uZenith.value.copy(env.zenith);
+      uniforms.uHorizon.value.copy(env.horizon);
+      uniforms.uSpec.value = 0.5 * env.lightIntensity;
+      uniforms.uFoamAmt.value = env.foamAmt;
+      uniforms.uFogNear.value = env.fogNear;
+      uniforms.uFogFar.value = env.fogFar;
       // Snap to the grid so the facets do not "swim" as the camera moves.
       mesh.position.x = Math.round(camera.position.x / CELL) * CELL;
       mesh.position.z = Math.round(camera.position.z / CELL) * CELL;

@@ -17,6 +17,9 @@ const WAVE_SPECS = [
 
 export const WAVE_COUNT = WAVE_SPECS.length;
 
+// How rough the sea is right now: about 0.5 in a calm, 1.6 in a gale. Set by the weather.
+export const sea = { state: 1 };
+
 export function buildWaves(baseAngle) {
   return WAVE_SPECS.map(([off, steep, length]) => {
     const a = baseAngle + off;
@@ -38,8 +41,8 @@ function smooth(a, b, x) {
 }
 
 // Height of the water surface at world position (x, z) at a given time.
-export function waveHeight(waves, x, z, time, seaState = 1) {
-  const c = calm(x, z) * seaState;
+export function waveHeight(waves, x, z, time) {
+  const c = calm(x, z) * sea.state;
   // Gerstner waves shift points sideways, so walk back to the point that ends up at (x, z).
   let px = x, pz = z;
   for (let it = 0; it < 3; it++) {
