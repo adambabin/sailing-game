@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Tradewind</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Nunito+Sans:wght@500;700;800&display=swap">
+<style>
+/* Layout: the sea fills the screen; small chart-like panels sit in the corners. */
+:root {
+  color-scheme: dark;
+  --ink: #10283a;
+  --panel: rgba(13, 38, 56, 0.62);
+  --panel-solid: #12334a;
+  --line: rgba(246, 236, 210, 0.22);
+  --paper: #f6ecd2;
+  --muted: #b9c9cf;
+  --brass: #f0c05a;
+  --coral: #ff7b63;
+  --display: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+  --body: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
+  --gap-l: max(16px, env(safe-area-inset-left, 0px));
+  --gap-r: max(16px, env(safe-area-inset-right, 0px));
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--ink); color: var(--paper); font-family: var(--body); font-size: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+#sea { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+#gauges { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: var(--gap-l); display: flex; gap: 14px; padding: 8px 14px; font-variant-numeric: tabular-nums; }
+.gauge { display: flex; flex-direction: column; gap: 1px; min-width: 52px; }
+.gauge small { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.gauge b { font-size: 17px; font-weight: 800; }
+.gauge b span { font-size: 11px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+
+#topright { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: var(--gap-r); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+#styles { display: flex; padding: 4px; gap: 4px; }
+button { font: inherit; color: var(--paper); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#styles button { padding: 7px 11px; border-radius: 7px; font-weight: 700; font-size: 13px; }
+#styles button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+#dial { width: 108px; padding: 6px 6px 4px; text-align: center; }
+#dial svg { display: block; width: 96px; height: 96px; margin: 0 auto; }
+#dial small { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+#toast { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 8px 18px; font-family: var(--display); font-size: 20px; text-align: center; max-width: min(80vw, 420px); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+#toast.show { opacity: 1; }
+#hint { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); padding: 7px 14px; font-weight: 700; text-align: center; max-width: 80vw; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+#hint.show { opacity: 1; }
+#hint.warn { color: var(--coral); }
+
+.pad { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: flex-end; }
+#pad-left { left: var(--gap-l); }
+#pad-right { right: var(--gap-r); }
+.pad button { width: 60px; height: 60px; border-radius: 50%; font-size: 22px; display: grid; place-items: center; }
+.pad button small { display: block; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: -4px; }
+.pad button.held, .pad button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.pad button.held small, .pad button[aria-pressed="true"] small { color: var(--ink); }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+
+#help { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px var(--gap-r) 16px var(--gap-l); background: rgba(8, 24, 36, 0.45); z-index: 5; }
+#help .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; max-width: 430px; width: 100%; box-sizing: border-box; max-height: 100%; overflow: auto; }
+#help h1 { font-family: var(--display); font-weight: 400; font-size: 38px; margin: 0 0 2px; }
+#help p { margin: 0 0 14px; color: var(--muted); line-height: 1.5; }
+#help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0 0 16px; }
+#help dt { font-weight: 800; white-space: nowrap; }
+#help dd { margin: 0; color: var(--muted); }
+#help .go { background: var(--brass); color: var(--ink); font-weight: 800; padding: 11px 20px; border-radius: 9px; font-size: 15px; }
+#helpbtn { width: 34px; height: 34px; border-radius: 50%; font-weight: 800; }
+@media (max-width: 560px) {
+  #gauges { gap: 10px; padding: 7px 10px; }
+  .gauge { min-width: 40px; }
+  .gauge b { font-size: 15px; }
+  #styles button { padding: 6px 8px; font-size: 12px; }
+  #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
+  #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<canvas id="sea"></canvas>
+
+<div id="gauges" class="panel">
+  <div class="gauge"><small>Speed</small><b><i id="g-speed" style="font-style:normal">0.0</i><span>kn</span></b></div>
+  <div class="gauge"><small>Heading</small><b id="g-heading">N</b></div>
+  <div class="gauge"><small>Sails</small><b><i id="g-sail" style="font-style:normal">0</i><span>%</span></b></div>
+  <div class="gauge"><small>Wind</small><b><i id="g-wind" style="font-style:normal">0</i><span>kn</span></b></div>
+</div>
+
+<div id="topright">
+  <div style="display:flex;gap:8px;align-items:center">
+    <div id="styles" class="panel" role="group" aria-label="Art style">
+      <button id="style-lowpoly" data-style="lowpoly">Low-poly</button>
+      <button id="style-cartoon" data-style="cartoon">Cartoon</button>
+      <button id="style-painterly" data-style="painterly">Painterly</button>
+    </div>
+    <button id="helpbtn" class="panel" aria-label="How to sail">?</button>
+  </div>
+  <div id="dial" class="panel">
+    <svg viewBox="-50 -50 100 100" aria-hidden="true">
+      <circle r="44" fill="none" stroke="rgba(246,236,210,0.3)" stroke-width="1.5"/>
+      <g id="dial-wind">
+        <path d="M0 0 L-25.2 -36 A44 44 0 0 1 25.2 -36 Z" fill="rgba(255,123,99,0.35)"/>
+        <path d="M0 -46 L6 -34 L2 -34 L2 -22 L-2 -22 L-2 -34 L-6 -34 Z" fill="#f0c05a" transform="rotate(180 0 -34)"/>
+      </g>
+      <path d="M0 -17 C7 -8 7 6 4.5 15 L-4.5 15 C-7 6 -7 -8 0 -17 Z" fill="#f6ecd2"/>
+    </svg>
+    <small>Wind</small>
+  </div>
+</div>
+
+<div id="toast" class="panel"></div>
+<div id="hint" class="panel"></div>
+
+<div id="pad-left" class="pad">
+  <button id="btn-port" class="panel" data-hold="left" aria-label="Steer to port (left)">&#9664;</button>
+  <button id="btn-stbd" class="panel" data-hold="right" aria-label="Steer to starboard (right)">&#9654;</button>
+</div>
+<div id="pad-right" class="pad">
+  <button id="btn-anchor" class="panel" aria-pressed="false" aria-label="Drop or weigh anchor"><span>&#9875;<small>Anchor</small></span></button>
+  <div class="stack">
+    <button id="btn-raise" class="panel" data-hold="up" aria-label="Raise sails"><span>&#9650;<small>Sails</small></span></button>
+    <button id="btn-lower" class="panel" data-hold="down" aria-label="Lower sails"><span>&#9660;<small>Sails</small></span></button>
+  </div>
+</div>
+
+<div id="help">
+  <div class="card">
+    <h1>Tradewind</h1>
+    <p>A quiet sail among the islands. The wind does the work; you choose how much sail to carry and where to point her.</p>
+    <dl>
+      <dt>A / D or &#9664; &#9654;</dt><dd>Steer to port and starboard</dd>
+      <dt>W / S or &#9650; &#9660;</dt><dd>Raise and lower the sails</dd>
+      <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
+      <dt>Drag, scroll</dt><dd>Look around and zoom</dd>
+      <dt>1 2 3</dt><dd>Switch art style</dd>
+    </dl>
+    <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
+    <button id="help-go" class="go">Set sail</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
