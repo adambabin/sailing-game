@@ -82,7 +82,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .gauge { min-width: 34px; }
   .gauge small { font-size: 9px; letter-spacing: 0.06em; }
   .gauge b { font-size: 15px; }
-  #tools button { padding: 6px 8px; font-size: 12px; }
+  #tools button { padding: 6px 7px; font-size: 12px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
   #shipyard { top: calc(118px + env(safe-area-inset-top, 0px)); }
   #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
@@ -106,6 +106,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <button id="tool-ship" aria-expanded="false">Ship</button>
       <button id="tool-time">Time</button>
       <button id="tool-weather">Weather</button>
+      <button id="tool-sound">Sound</button>
     </div>
     <button id="helpbtn" class="panel" aria-label="How to sail">?</button>
   </div>
@@ -152,6 +153,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
       <dt>Drag, scroll</dt><dd>Look around and zoom</dd>
       <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
+      <dt>M</dt><dd>Sound, no music, or muted</dd>
     </dl>
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
     <button id="help-go" class="go">Set sail</button>

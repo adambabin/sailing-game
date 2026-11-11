@@ -9,6 +9,7 @@ import { createOcean } from './ocean.js';
 import { createSky } from './sky.js';
 import { createIslands, ISLANDS, nightLights } from './islands.js';
 import { createShip, SHIP_COLORS } from './ship.js';
+import { createAudio, MODE_LABELS } from './audio.js';
 
 const canvas = document.getElementById('sea');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -183,12 +184,25 @@ function cycleWeather() {
 document.getElementById('tool-time').addEventListener('click', skipTime);
 document.getElementById('tool-weather').addEventListener('click', cycleWeather);
 
+// ---- Sound ------------------------------------------------------------------------
+const audio = createAudio();
+const soundBtn = document.getElementById('tool-sound');
+soundBtn.textContent = MODE_LABELS[audio.mode];
+function cycleSound() {
+  audio.start();
+  soundBtn.textContent = MODE_LABELS[audio.cycleMode()];
+}
+soundBtn.addEventListener('click', cycleSound);
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
+document.addEventListener('visibilitychange', () => audio.pause(document.hidden));
+
 // ---- Controls --------------------------------------------------------------------
 const held = { left: false, right: false, up: false, down: false };
 const KEYS = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down' };
 const anchorBtn = document.getElementById('btn-anchor');
 function toggleAnchor() {
   ship.state.anchorDown = !ship.state.anchorDown;
+  audio.anchor(ship.state.anchorDown);
   anchorBtn.setAttribute('aria-pressed', String(ship.state.anchorDown));
   showToast(ship.state.anchorDown ? 'Anchor away' : 'Anchor aweigh');
 }
@@ -197,6 +211,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'Space' && !e.repeat) { toggleAnchor(); e.preventDefault(); }
   else if (e.code === 'KeyT') skipTime();
   else if (e.code === 'KeyR') cycleWeather();
+  else if (e.code === 'KeyM') cycleSound();
   else if (e.code === 'Enter' || e.code === 'Escape') closeHelp();
 });
 window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
@@ -329,6 +344,8 @@ function frame() {
   sky.update(camera, dt, env, wind);
   windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
+  const st = ship.state;
+  audio.update(dt, { wind: wind.speed, sea: sea.state, speed: st.speed, rain: env.rain, night: env.night, roll: st.roll, luffing: st.inIrons, nearLand: !!nearName });
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -336,7 +353,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env,
+  ship, wind, cam, env, audio,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }
