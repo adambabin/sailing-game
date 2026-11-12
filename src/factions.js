@@ -11,7 +11,7 @@ export const FACTIONS = {
 // Pirate waters. Stay out of these circles and no pirate will trouble you.
 export const ZONES = [
   { name: 'The Serpent’s Run', x: -350, z: 540, r: 300 },
-  { name: 'Deadman’s Reach', x: 1160, z: -880, r: 340 },
+  { name: 'Deadman’s Reach', x: 1210, z: -810, r: 320 },
 ];
 export const zoneAt = (x, z, pad = 0) => ZONES.find((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r + pad) || null;
 

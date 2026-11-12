@@ -73,6 +73,12 @@ she went down; sail over them to haul them aboard. Each pirate captain has a
 name and a bounty, listed on the board in every tavern. Sink one and the navy
 owes you the bounty, which you collect at any tavern (not while wanted).
 
+Ships sail in company: a merchant convoy of three with a navy escort, a navy
+patrol of two, and a pirate squadron in each stretch of pirate waters. Every
+few minutes the navy sweeps one of those waters and a battle follows; a notice
+tells you which way the gunfire is. Join in against the pirates and the navy
+pays you half the bounty for any they finish after you have hit her.
+
 A ship you have beaten badly enough strikes her colours and stops. Come
 alongside and **Board** her to choose: take her as your own ship, add her to
 your fleet, strip her and sink her, or let her go. Up to three ships can sail

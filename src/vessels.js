@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { buildNpcModel } from './ship.js';
 import { applyPaint } from './materials.js';
 import { waveHeight } from './waves.js';
-import { islandCoast, nightLights } from './islands.js';
+import { islandCoast, nearestIsland, nightLights } from './islands.js';
 import { inArc } from './combat.js';
 import { FACTIONS, ZONES, newCaptain, BOUNTY } from './factions.js';
 
@@ -53,6 +53,10 @@ export function createVessels(waves, fx, fire) {
       provoked: 0, // seconds she will keep fighting the player for having been fired on
       struck: 0, // seconds left to board her after she has struck her colours (0 = still flying them)
       fleet: faction === 'player', slot: 0,
+      leader: null, // the ship she sails in company with (a squadron, patrol or convoy), if any
+      escort: false, // a warship guarding a convoy
+      raidZone: null, raidFor: 0, // pirate waters the navy is sweeping, and for how much longer
+      assist: 0, // seconds since you last hit her, for a share of the bounty if someone else finishes her
       attacker: null, enemy: null, think: rand(0, 1),
       reload: { port: 0, stbd: 0 }, reloadTime: model.type.reload * 1.5,
       // A cannonball has struck her.
@@ -60,7 +64,11 @@ export function createVessels(waves, fx, fire) {
         if (v.sinking) return;
         v.hull = Math.max(0, v.hull - damage / v.type.hullMax);
         v.attacker = by;
-        if (v.faction === 'merchant') v.alarm = 45;
+        if (by.faction === 'player') v.assist = 90;
+        if (v.faction === 'merchant') {
+          // The whole convoy scatters when one of them is fired on.
+          for (const o of list) if (o.faction === 'merchant') { o.alarm = 45; o.attacker = by; }
+        }
         else if (by.faction === 'player' && !v.fleet) v.provoked = 90;
         else if (!v.fleet || by.faction !== 'player') v.enemy = by;
         fx.struck(v, by);
@@ -77,15 +85,20 @@ export function createVessels(waves, fx, fire) {
     list.push(v);
     return v;
   }
-  add('brig', 'merchant');
-  add('sloop', 'merchant');
-  add('brig', 'merchant');
-  add('brig', 'navy');
-  add('brig', 'navy');
-  add('sloop', 'pirate', ZONES[0]);
-  add('brig', 'pirate', ZONES[0]);
-  add('sloop', 'pirate', ZONES[1]);
-  add('brig', 'pirate', ZONES[1]);
+  // Ships sail in company. A follower keeps station on her leader and fights her leader's fights.
+  const company = (leader, ...followers) => followers.forEach((f, i) => { f.leader = leader; f.slot = i; f.x = leader.x + 40 * (i + 1); f.z = leader.z + 30; });
+  // A merchant convoy of three, with a navy sloop as escort.
+  const convoy = add('brig', 'merchant');
+  const guard = add('sloop', 'navy');
+  guard.escort = true;
+  company(convoy, add('sloop', 'merchant'), add('brig', 'merchant'), guard);
+  // A navy patrol of two brigs.
+  const patrol = add('brig', 'navy');
+  company(patrol, add('brig', 'navy'));
+  // A pirate squadron in each stretch of pirate waters: a brig, with a sloop in company.
+  for (const zone of ZONES) company(add('brig', 'pirate', zone), add('sloop', 'pirate', zone));
+  let raidWait = rand(200, 380); // seconds until the navy next sweeps pirate waters
+  const leading = (v) => (v.leader && !v.leader.gone && !v.leader.sinking && !v.leader.struck ? v.leader : null);
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const nearest = (v, faction, within) => {
@@ -104,6 +117,14 @@ export function createVessels(waves, fx, fire) {
   function chooseEnemy(v, world) {
     const p = world.player, canSeePlayer = !world.ashore && !p.sinking;
     if (v.fleet) return world.fleetEnemy && dist(v, world.fleetEnemy) < 600 ? world.fleetEnemy : null;
+    const own = ownQuarrel(v, world, p, canSeePlayer);
+    if (own) return own;
+    // An escort goes for whoever has frightened her convoy. Otherwise a follower backs her leader.
+    const lead = leading(v);
+    if (v.escort && lead && lead.alarm > 0 && lead.attacker && !lead.attacker.sinking && (lead.attacker !== p || canSeePlayer) && dist(v, lead.attacker) < 700) return lead.attacker === p ? nearestOfYours(v, p) : lead.attacker;
+    return lead && lead.enemy && !lead.enemy.struck ? lead.enemy : null;
+  }
+  function ownQuarrel(v, world, p, canSeePlayer) {
     if (v.faction === 'pirate') {
       // Pirates go for you inside their own waters, or anywhere for a while if you fired on them.
       const inWaters = Math.hypot(p.x - v.zone.x, p.z - v.zone.z) < v.zone.r;
@@ -125,8 +146,19 @@ export function createVessels(waves, fx, fire) {
     fx.left(v);
   }
 
+  // The navy sails into pirate waters to clear them out. A battle follows, which you may join or avoid.
+  function raid() {
+    const flag = list.find((v) => v.faction === 'navy' && !v.escort && !v.leader && !v.gone && !v.sinking && !v.struck);
+    if (!flag) return null;
+    flag.raidZone = ZONES[Math.floor(Math.random() * ZONES.length)];
+    flag.raidFor = 260;
+    flag.goal = { x: flag.raidZone.x, z: flag.raidZone.z };
+    return flag.raidZone;
+  }
+
   function update(dt, time, world) {
     const player = world.player;
+    if ((raidWait -= dt) <= 0) { raidWait = rand(360, 600); raid(); }
     for (let n = list.length - 1; n >= 0; n--) {
       const v = list[n];
       if (v.gone) {
@@ -159,9 +191,11 @@ export function createVessels(waves, fx, fire) {
         v.provoked = Math.max(0, v.provoked - dt);
         if ((v.think -= dt) <= 0) { v.think = 0.8; v.enemy = chooseEnemy(v, world); }
         if (v.enemy && (v.enemy.sinking || v.enemy.gone || v.enemy.struck)) v.enemy = null;
-        if (Math.hypot(v.goal.x - v.x, v.goal.z - v.z) < 120) v.goal = openWater(null, 0, v.zone);
+        v.assist = Math.max(0, v.assist - dt);
+        if (v.raidZone && (v.raidFor -= dt) <= 0) v.raidZone = null;
+        if (Math.hypot(v.goal.x - v.x, v.goal.z - v.z) < 120) v.goal = openWater(null, 0, v.raidZone || v.zone);
         let want = Math.atan2(v.goal.x - v.x, v.goal.z - v.z);
-        const e = v.enemy;
+        const e = v.enemy, lead = v.fleet ? player : leading(v);
         if (v.alarm > 0 && v.attacker) {
           // Run: stern to the danger, every stitch of sail.
           want = Math.atan2(v.x - v.attacker.x, v.z - v.attacker.z);
@@ -181,19 +215,19 @@ export function createVessels(waves, fx, fire) {
           }
           speedWant = v.cruise * (v.fleet ? 1.6 : 1.25);
           for (const side of [1, -1]) if (v.reload[side > 0 ? 'port' : 'stbd'] <= 0 && inArc(v, side, e)) fire(v, side, e);
-        } else if (v.fleet) {
-          // One of yours with nobody to fight: keep station astern of the flagship, on alternate quarters.
-          const ph = player.heading, back = 42 + 30 * Math.floor(v.slot / 2) + 14 * (v.slot % 2), out = (v.slot % 2 ? -1 : 1) * 30;
-          const sx = player.x - Math.sin(ph) * back + Math.cos(ph) * out, sz = player.z - Math.cos(ph) * back - Math.sin(ph) * out;
-          const gap = Math.hypot(sx - v.x, sz - v.z), pspeed = Math.hypot(player.vx, player.vz);
-          if (gap > 1100) { v.x = sx; v.z = sz; v.heading = ph; } // hopelessly left behind: she catches up out of sight
+        } else if (lead) {
+          // In company with nobody to fight: keep station astern of the leader, on alternate quarters.
+          const ph = lead.heading, back = 42 + 30 * Math.floor(v.slot / 2) + 14 * (v.slot % 2), out = (v.slot % 2 ? -1 : 1) * 30;
+          const sx = lead.x - Math.sin(ph) * back + Math.cos(ph) * out, sz = lead.z - Math.cos(ph) * back - Math.sin(ph) * out;
+          const gap = Math.hypot(sx - v.x, sz - v.z), pspeed = Math.hypot(lead.vx, lead.vz);
+          if (v.fleet && gap > 1100) { v.x = sx; v.z = sz; v.heading = ph; } // hopelessly left behind: she catches up out of sight
           want = gap > 18 ? Math.atan2(sx - v.x, sz - v.z) : ph;
           speedWant = gap > 18 ? Math.min(Math.max(v.cruise * 1.9, pspeed * 1.1), pspeed + gap * 0.09) : pspeed;
         }
         // Whatever she is doing, she will not run herself ashore.
         const ax = v.x + Math.sin(v.heading) * 150, az = v.z + Math.cos(v.heading) * 150;
         if (islandCoast(ax, az) > -0.75) want = v.heading - 1.3;
-        else if (!e && !v.alarm && !v.fleet && Math.hypot(player.x - ax, player.z - az) < 100) want = v.heading - 1.2; // and gives you room
+        else if (!e && !v.alarm && !lead && Math.hypot(player.x - ax, player.z - az) < 100) want = v.heading - 1.2; // and gives you room
         if (v.fleet && islandCoast(v.x, v.z) > -0.45) speedWant = Math.min(speedWant, 1.5); // close inshore, she creeps
         let diff = want - v.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -205,6 +239,12 @@ export function createVessels(waves, fx, fire) {
       v.vz = Math.cos(v.heading) * v.speed;
       v.x += v.vx * dt;
       v.z += v.vz * dt;
+      // A last resort in the heat of a fight: the shallows shoulder her back out to sea.
+      if (!v.sinking && islandCoast(v.x, v.z) > -0.3) {
+        const isl = nearestIsland(v.x, v.z), ox = v.x - isl.x, oz = v.z - isl.z, ol = Math.hypot(ox, oz) || 1;
+        v.x += (ox / ol) * 5 * dt;
+        v.z += (oz / ol) * 5 * dt;
+      }
       v.y = waveHeight(waves, v.x, v.z, time) * 0.5;
       // Ships a long way off are not drawn at all, which keeps things smooth.
       v.model.visible = Math.hypot(v.x - world.eye.x, v.z - world.eye.z) < 2600;
@@ -215,7 +255,7 @@ export function createVessels(waves, fx, fire) {
   }
 
   return {
-    group, list, update, remove,
+    group, list, update, remove, raid,
     fleet: () => list.filter((v) => v.fleet),
     // Add a ship to your fleet, painted in your colours, at a given place.
     addFleet(typeId, hull, look, at) {

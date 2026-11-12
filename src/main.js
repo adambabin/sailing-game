@@ -90,7 +90,11 @@ const fx = {
     if (v.fleet) { showToast(v.label + ' is lost.'); return; }
     const yours = by === me || by.fleet; // your fleet's kills count as yours
     loot.drop(v, yours && v.faction === 'pirate' && Math.random() < 0.35 && treasure.canHoldMore());
-    if (!yours) return;
+    if (!yours) {
+      // Someone else finished a pirate you had been fighting: the navy pays you half for your part.
+      if (v.faction === 'pirate' && v.assist > 0) { const half = Math.round(v.bounty / 2); save.bountyDue += half; persist(); showToast(`${v.captain} is sunk. ${half} coins for your part in it.`); }
+      return;
+    }
     if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; persist(); showToast(`${v.captain} is sunk. ${v.bounty} coins bounty to collect at any tavern.`); }
     else { addWanted(v.faction === 'navy' ? 2 : 1.5); showToast('You have sunk a ' + v.label.toLowerCase() + '. Every port will hear of it.'); }
   },
@@ -220,6 +224,25 @@ function boardPrize(v) {
     }),
     row('prize-strip', 'Strip her and sink her', 'Take what she carries and send her to the bottom.', 'Strip her', true, () => { v.struck = 0; v.hit(99999, me); }),
     row('prize-free', 'Let her go', 'She makes what sail she can and leaves.', 'Let her go', true, () => { v.struck = 0; v.hull = Math.min(1, v.hull + 0.2); v.attacker = me; v.alarm = 120; v.provoked = 0; }));
+}
+
+// Word of a battle: when the navy and pirates are at each other within earshot, say where.
+const COMPASS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+let battleQuiet = 20;
+function listenForBattle(dt) {
+  if ((battleQuiet -= dt) > 0 || shore.state.active) return;
+  battleQuiet = 3;
+  const s = ship.state;
+  for (const v of vessels.list) {
+    const e = v.enemy;
+    if (v.faction !== 'navy' || v.gone || !e || e.faction !== 'pirate' || Math.hypot(v.x - e.x, v.z - e.z) > 260) continue;
+    const d = Math.hypot(v.x - s.x, v.z - s.z);
+    if (d < 150 || d > 1300) continue;
+    const deg = ((Math.atan2(v.x - s.x, -(v.z - s.z)) * 180) / Math.PI + 360) % 360;
+    showToast(`Gunfire to the ${COMPASS[Math.round(deg / 45) % 8]}: the navy is fighting pirates.`);
+    battleQuiet = 150; // one notice per battle
+    return;
+  }
 }
 
 // Warnings: entering pirate waters, becoming wanted, and a tag over the nearest ship.
@@ -881,6 +904,7 @@ function frame() {
   combat.update(dt, time, targets);
   loot.update(dt, time, ashore || ship.state.sinking ? null : ship.state, wind, salvage);
   updateDangers();
+  listenForBattle(dt);
   placeCrew(time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
@@ -913,6 +937,6 @@ window.game = {
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); }
   },
 };
