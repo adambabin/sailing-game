@@ -49,7 +49,7 @@ export function createChart() {
     // Sails in sight: tan for merchants, blue for the navy, black for pirates.
     for (const v of vessels) {
       if (v.gone || Math.hypot(v.x - ship.x, v.z - ship.z) > 900) continue;
-      g.fillStyle = v.faction === 'pirate' ? '#1d1d22' : v.faction === 'navy' ? '#2a5fa8' : '#a07a3c';
+      g.fillStyle = v.fleet ? '#2f8a45' : v.faction === 'pirate' ? '#1d1d22' : v.faction === 'navy' ? '#2a5fa8' : '#a07a3c';
       g.beginPath();
       g.arc(X(v.x), Z(v.z), 2.4, 0, 7);
       g.fill();
@@ -121,6 +121,7 @@ export function createChart() {
     const cargo = GOODS.filter((x) => save.cargo[x.id]).map((x) => `${save.cargo[x.id]} ${x.name.toLowerCase()}`).join(', ');
     const rows = [
       ['Ship', (SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop') + (save.ship.hull < 0.995 ? `, hull at ${Math.round(save.ship.hull * 100)}%` : '')],
+      ...(save.fleet.length ? [['Fleet', save.fleet.map((f) => `${SHIP_TYPES[f.type].name.toLowerCase()} ${Math.round(f.hull * 100)}%`).join(', ')]] : []),
       ['Day', save.days],
       ['Sailed', (save.distance / NM).toFixed(1) + ' nautical miles'],
       ['Islands found', `${save.discovered.length} of ${ISLANDS.length}`],

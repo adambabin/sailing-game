@@ -73,6 +73,13 @@ she went down; sail over them to haul them aboard. Each pirate captain has a
 name and a bounty, listed on the board in every tavern. Sink one and the navy
 owes you the bounty, which you collect at any tavern (not while wanted).
 
+A ship you have beaten badly enough strikes her colours and stops. Come
+alongside and **Board** her to choose: take her as your own ship, add her to
+your fleet, strip her and sink her, or let her go. Up to three ships can sail
+in your fleet. They follow in your wake, fight whoever you are fighting, add
+their holds to yours, and cost a daily wage. Shipwrights repair or buy them.
+If your flagship is sunk, your next ship picks you up and becomes the flagship.
+
 Treasure maps can be bought in any tavern (60 coins) or found in a bottle that
 washes up on one beach each day. A map shows an island's shape and an X but
 not its name. Work out which island it is, go ashore, and use **Dig here**.

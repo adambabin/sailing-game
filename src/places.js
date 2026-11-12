@@ -214,6 +214,16 @@ export function createPlaces(game) {
         id: 'repair', disabled: !cost || save.coins < cost,
         onclick: () => { save.coins -= cost; st.hull = 1; game.audio.coin(); persist(); shipwright(isl); },
       }, cost ? `${cost} coins` : 'No damage'));
+    // The ships sailing in company with you: mend them, or pay them off.
+    const fleetRows = game.vessels.fleet().map((v, i) => {
+      const fix = Math.ceil((1 - v.hull) * v.type.hullMax * 0.6), worth = game.shipValue(v.typeId, v.hull);
+      return h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, v.label), h('span', { className: 'muted' }, ` hull ${Math.round(v.hull * 100)}% · ${game.wages[v.typeId]} coins a day`)),
+        h('div', { className: 'trade-buttons' },
+          h('button', { id: 'fleet-repair-' + i, disabled: !fix || save.coins < fix, onclick: () => { save.coins -= fix; v.hull = 1; game.audio.coin(); game.syncFleet(); shipwright(isl); } }, fix ? `Repair ${fix}` : 'Sound'),
+          h('button', { id: 'fleet-sell-' + i, onclick: () => { save.coins += worth; game.vessels.remove(v); game.audio.coin(); shipwright(isl); } }, `Sell ${worth}`)));
+    });
+    const fleetPart = fleetRows.length ? [h('h3', {}, 'Your fleet'), ...fleetRows] : [];
     const upgrades = UPGRADES.map((u) => {
       const has = !!save.upgrades[u.id];
       return h('div', { className: 'trade-row' },
@@ -237,6 +247,7 @@ export function createPlaces(game) {
       h('h3', {}, 'Ships'),
       ...ships,
       h('p', { className: 'muted' }, 'Ships you own are kept for you at every shipwright. Your paint goes with you.'),
+      ...fleetPart,
       h('h3', {}, 'Paint and fittings'),
       h('div', { className: 'look-rows' }, ...rows),
       h('p', { className: 'muted' }, `Ringed paints cost ${PAINT_COST} coins, once. Every shipwright stocks different ones.`),

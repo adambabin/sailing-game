@@ -21,6 +21,8 @@ export const save = {
   piratesSunk: 0,
   bountyDue: 0, // coins the navy owes you for pirates sunk, to collect at any harbour
   bountyPaid: 0,
+  fleet: [], // ships sailing in company with you: { type, hull }
+  prizes: 0, // ships captured
   ships: ['sloop'], // kinds of ship you own
   shipType: 'sloop', // the one you are sailing
   ship: {}, // where the ship was left: position, heading, sail, anchor, time of day

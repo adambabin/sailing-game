@@ -81,7 +81,9 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 .ashore #btn-anchor, .ashore #dial, .ashore .fire { display: none; }
 #vessel-tag { font-family: var(--body); font-size: 12px; font-weight: 700; }
 #vessel-tag.foe { border-color: var(--coral); color: var(--coral); }
-#wanted { position: fixed; top: calc(70px + env(safe-area-inset-top, 0px)); left: var(--gap-l); padding: 4px 10px; font-weight: 800; font-size: 12px; color: var(--coral); border-color: var(--coral); }
+#chips { position: fixed; top: calc(70px + env(safe-area-inset-top, 0px)); left: var(--gap-l); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
+.chip { padding: 4px 10px; font-weight: 800; font-size: 12px; }
+#wanted { color: var(--coral); border-color: var(--coral); }
 #hull-bar { position: absolute; left: 12px; right: 12px; bottom: 3px; height: 3px; border-radius: 2px; background: rgba(246, 236, 210, 0.18); overflow: hidden; }
 #hull-fill { display: block; height: 100%; width: 100%; background: var(--good); transition: width 0.3s; }
 #hull-fill.hurt { background: var(--brass); }
@@ -122,7 +124,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   #tools { gap: 2px; }
   #tools button { padding: 6px 5px; font-size: 11px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
-  #wanted { top: calc(112px + env(safe-area-inset-top, 0px)); }
+  #chips { top: calc(112px + env(safe-area-inset-top, 0px)); }
   #action { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
   .sheet { max-height: calc(100% - 40px); }
   #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
@@ -167,7 +169,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 </div>
 
 <div id="labels" aria-hidden="true"><div id="vessel-tag" class="place-label" hidden></div></div>
-<div id="wanted" class="panel" hidden></div>
+<div id="chips"><div id="wanted" class="panel chip" hidden></div><div id="fleet-chip" class="panel chip" hidden></div></div>
 
 <div id="chart" class="panel sheet" hidden>
   <div class="sheet-head"><h2>Chart and logbook</h2><button id="chart-close" class="close">Close</button></div>

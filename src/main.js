@@ -62,6 +62,7 @@ if (save.ship.x !== undefined && terrainHeight(save.ship.x, save.ship.z) < -3) {
 function saveGame() {
   const s = ship.state;
   if (s.sinking) return; // nothing to save while she is going down
+  save.fleet = vessels.fleet().filter((v) => !v.sinking).map((v) => ({ type: v.typeId, hull: v.hull }));
   save.ship = { x: s.x, z: s.z, heading: s.heading, sail: s.sail, anchor: s.anchorDown, hour: env.hour, hull: s.hull };
   persist();
 }
@@ -79,17 +80,24 @@ const fx = {
   // Somebody has been hit. Firing on honest ships makes you a wanted captain.
   struck: (v, by) => {
     if (by !== me) return;
+    if (!v.fleet) { me.lastTarget = v; me.lastTargetFor = 40; } // your fleet will go for whoever you are shooting at
     if (v.faction === 'merchant' && addWanted(0.12, 1)) showToast('You have fired on a merchant. The navy will hunt you.');
     if (v.faction === 'navy' && addWanted(0.2, 2)) showToast('You have fired on the navy. You are a wanted captain.');
   },
   sunk: (v, by) => {
     audio.sink();
     // She leaves her cargo floating. A pirate you sank yourself may have had a map aboard.
-    loot.drop(v, by === me && v.faction === 'pirate' && Math.random() < 0.35 && treasure.canHoldMore());
-    if (by !== me) return;
+    if (v.fleet) { showToast(v.label + ' is lost.'); return; }
+    const yours = by === me || by.fleet; // your fleet's kills count as yours
+    loot.drop(v, yours && v.faction === 'pirate' && Math.random() < 0.35 && treasure.canHoldMore());
+    if (!yours) return;
     if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; persist(); showToast(`${v.captain} is sunk. ${v.bounty} coins bounty to collect at any tavern.`); }
     else { addWanted(v.faction === 'navy' ? 2 : 1.5); showToast('You have sunk a ' + v.label.toLowerCase() + '. Every port will hear of it.'); }
   },
+  // A beaten ship has hauled down her flag.
+  surrendered: (v) => showToast(`${v.captain || 'The ' + v.label.toLowerCase()} has struck her colours. Come alongside to board.`),
+  // A ship has left the game for good (one of your fleet, sunk or sold).
+  left: () => { refreshTargets(); syncFleet(); },
 };
 const combat = createCombat(waves, fx);
 const vessels = createVessels(waves, fx, (shooter, side, target) => combat.fire(shooter, side, [target]));
@@ -129,9 +137,93 @@ const me = {
   },
 };
 const targets = [me, ...vessels.list];
-const world = { player: me, eye: camera.position, ashore: false, wanted: false };
+function refreshTargets() {
+  targets.length = 0;
+  targets.push(me, ...vessels.list);
+}
+const world = { player: me, eye: camera.position, ashore: false, wanted: false, fleetEnemy: null };
+
+// ---- Your fleet: ships that sail in company with you -------------------------------
+const MAX_FLEET = 3, WAGES = { sloop: 15, brig: 30, galleon: 60 }; // coins a day for each ship's crew
+const shipValue = (id, hull) => Math.round((SHIP_TYPES[id].price || 240) * 0.5 * Math.max(0.3, hull)); // what a shipwright pays for her
+// Keep the saved list in step with the ships actually afloat, and the hold with the fleet's size.
+function syncFleet() {
+  vessels.renumber();
+  save.fleet = vessels.fleet().filter((v) => !v.sinking).map((v) => ({ type: v.typeId, hull: v.hull }));
+  applyUpgrades();
+  // If the fleet has shrunk, cargo that no longer fits is lost with her.
+  let over = cargoCount() - save.hold;
+  for (const id of Object.keys(save.cargo)) { const cut = Math.min(over, save.cargo[id]); if (cut > 0) { save.cargo[id] -= cut; over -= cut; } }
+  persist();
+}
+function joinFleet(typeId, hull, at) {
+  vessels.addFleet(typeId, hull, look, at);
+  refreshTargets();
+  syncFleet();
+}
+// Whoever your fleet should be fighting: a ship that is after you or them, or the one you last fired on.
+function pickFleetEnemy(dt) {
+  me.lastTargetFor = Math.max(0, (me.lastTargetFor || 0) - dt);
+  let best = null, bd = 650;
+  for (const v of vessels.list) {
+    if (v.fleet || v.gone || v.sinking || v.struck) continue;
+    const hostile = v.enemy === me || (v.enemy && v.enemy.fleet) || (v === me.lastTarget && me.lastTargetFor > 0);
+    const d = Math.hypot(v.x - ship.state.x, v.z - ship.state.z);
+    if (hostile && d < bd) { bd = d; best = v; }
+  }
+  world.fleetEnemy = shore.state.active ? null : best;
+}
+// Each morning the fleet's crews are paid. If the purse is short, the last ship to join sails away.
+function payWages() {
+  const fleet = vessels.fleet();
+  if (!fleet.length) return;
+  const due = fleet.reduce((a, v) => a + WAGES[v.typeId], 0);
+  if (save.coins >= due) { save.coins -= due; showToast(`Fleet wages paid: ${due} coins`); }
+  else { const v = fleet[fleet.length - 1]; vessels.remove(v); showToast(`You cannot pay the fleet. ${v.label} has left you.`); }
+  persist();
+}
+
+// ---- Prizes: boarding a ship that has struck her colours ---------------------------
+const mk = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+function prizeNearby() {
+  const s = ship.state;
+  if (Math.abs(s.speed) > 4.5) return null;
+  return vessels.list.find((v) => v.struck && !v.gone && Math.hypot(v.x - s.x, v.z - s.z) < 60 + v.size.bow) || null;
+}
+function boardPrize(v) {
+  const who = v.captain ? `${v.captain}’s ${v.type.name.toLowerCase()}` : 'the ' + v.label.toLowerCase();
+  const sale = shipValue(ship.typeId, ship.state.hull), fits = cargoCount() <= v.type.hold + (save.upgrades.hold ? 10 : 0) + vessels.fleet().reduce((a, f) => a + f.type.hold, 0);
+  // Taking her counts as beating her: bounty for a pirate, a darker name for an honest ship.
+  const claim = () => {
+    save.prizes++;
+    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; } else addWanted(1, 1);
+    v.struck = 0; v.gone = true; v.away = 90 + Math.random() * 60;
+  };
+  const row = (id, title, detail, button, enabled, run) => mk('div', { className: 'trade-row' },
+    mk('div', { className: 'ship-info' }, mk('b', {}, title), mk('div', { className: 'muted' }, detail)),
+    mk('button', { id, disabled: !enabled, onclick: () => { run(); audio.coin(); persist(); places.close(); } }, button));
+  places.card('Boarding ' + who,
+    mk('p', { className: 'muted' }, `Her crew stand with their hands open. She is a ${v.type.name.toLowerCase()}, hull at ${Math.round(v.hull * 100)}%, holding ${v.type.hold} crates.` + (v.faction === 'pirate' ? ` There is ${v.bounty} coins on her captain.` : ' Taking an honest ship will make you a wanted captain.')),
+    row('prize-take', 'Take her as your ship', !fits ? 'Your cargo will not fit in her.' : ship.typeId === 'sloop' ? 'Your sloop is sent home to wait for you at the shipwright.' : `Your ${ship.type.name.toLowerCase()} is sent in and sold for ${sale} coins.`, 'Take her', fits, () => {
+      const old = ship.typeId, at = { hull: Math.max(0.08, v.hull) };
+      claim();
+      if (old !== 'sloop') save.coins += sale;
+      if (old !== v.typeId && old !== 'sloop') save.ships = save.ships.filter((id) => id !== old);
+      setShip(v.typeId);
+      ship.state.hull = at.hull;
+      showToast(`You shift your flag to the ${v.type.name.toLowerCase()}.`);
+    }),
+    row('prize-fleet', 'Add her to your fleet', vessels.fleet().length >= MAX_FLEET ? `You already have ${MAX_FLEET} ships in company.` : v.hull < 0.1 ? 'She is too far gone to sail in company.' : `She follows you and fights at your side. Her crew want ${WAGES[v.typeId]} coins a day.`, 'Take her on', vessels.fleet().length < MAX_FLEET && v.hull >= 0.1, () => {
+      claim();
+      joinFleet(v.typeId, v.hull, { x: v.x, z: v.z, heading: v.heading });
+      showToast(`The ${v.type.name.toLowerCase()} joins your fleet.`);
+    }),
+    row('prize-strip', 'Strip her and sink her', 'Take what she carries and send her to the bottom.', 'Strip her', true, () => { v.struck = 0; v.hit(99999, me); }),
+    row('prize-free', 'Let her go', 'She makes what sail she can and leaves.', 'Let her go', true, () => { v.struck = 0; v.hull = Math.min(1, v.hull + 0.2); v.attacker = me; v.alarm = 120; v.provoked = 0; }));
+}
 
 // Warnings: entering pirate waters, becoming wanted, and a tag over the nearest ship.
+const fleetChip = document.getElementById('fleet-chip');
 const wantedChip = document.getElementById('wanted'), vesselTag = document.getElementById('vessel-tag');
 let inZone = null;
 function updateDangers() {
@@ -141,6 +233,9 @@ function updateDangers() {
     else if (inZone) showToast('Clear of ' + inZone.name);
     inZone = zone;
   }
+  const fleet = vessels.fleet();
+  fleetChip.hidden = !fleet.length;
+  if (fleet.length) { const t = 'Fleet: ' + fleet.map((v) => `${v.type.name.toLowerCase()} ${Math.round(v.hull * 100)}%`).join(' · '); if (fleetChip.textContent !== t) fleetChip.textContent = t; }
   wantedChip.hidden = !isWanted();
   if (isWanted()) wantedChip.textContent = 'Wanted ' + '★'.repeat(Math.floor(wanted()));
   // Name the nearest ship, and show how she is faring.
@@ -150,7 +245,7 @@ function updateDangers() {
     vPos.set(near.x, near.y + near.top + 6, near.z).project(camera);
     vesselTag.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05;
     const who = near.captain ? `${near.captain} · ${near.label.toLowerCase()}` : near.label;
-    const text = near.sinking ? who + ' · sinking' : who + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
+    const text = near.struck ? who + ' · colours struck' : near.sinking ? who + ' · sinking' : who + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
     if (vesselTag.textContent !== text) vesselTag.textContent = text;
     vesselTag.classList.toggle('foe', near.enemy === me);
     vesselTag.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
@@ -158,7 +253,7 @@ function updateDangers() {
 }
 function fire(side) {
   if (shore.state.active || !help.hidden) return;
-  combat.fire(me, side, targets);
+  combat.fire(me, side, targets.filter((t) => !t.fleet)); // the gun crews never lay on your own ships
 }
 const firePort = document.getElementById('btn-fire-port'), fireStbd = document.getElementById('btn-fire-stbd');
 firePort.addEventListener('click', () => fire(1));
@@ -172,6 +267,19 @@ function lostAtSea() {
   const crates = Object.values(save.cargo).reduce((a, n) => a + n, 0);
   save.cargo = {};
   if (!wasSloop) save.ships = save.ships.filter((id) => id !== ship.typeId);
+  const next = vessels.fleet().find((v) => !v.sinking);
+  if (next) {
+    // With a fleet, you are picked up by your next ship and carry on from where she lies.
+    const at = { x: next.x, z: next.z, heading: next.heading, hull: next.hull };
+    vessels.remove(next);
+    setShip(next.typeId);
+    Object.assign(s, { ...at, speed: 0, sail: 0.3, anchorDown: false, anchorDepth: 0, sinking: 0, roll: 0, pitch: 0 });
+    anchorBtn.setAttribute('aria-pressed', 'false');
+    first = true;
+    saveGame();
+    places.show('Your flagship is lost', [`Your ${lost} is gone` + (crates ? `, and ${crates} crates of cargo with her.` : '.'), `A boat from your ${next.type.name.toLowerCase()} pulls you from the water. She is your flagship now.`]);
+    return;
+  }
   setShip('sloop');
   Object.assign(s, { x: HOME.x, z: HOME.z, heading: Math.PI, speed: 0, sail: 0, anchorDown: true, anchorDepth: 1, hull: 1, sinking: 0, roll: 0, pitch: 0 });
   anchorBtn.setAttribute('aria-pressed', 'true');
@@ -298,10 +406,11 @@ try {
 } catch {}
 function applyLook() {
   ship.setLook(look);
+  vessels.repaintFleet(look);
   try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
 }
 function applyUpgrades() {
-  save.hold = ship.type.hold + (save.upgrades.hold ? 10 : 0);
+  save.hold = ship.type.hold + (save.upgrades.hold ? 10 : 0) + vessels.fleet().reduce((a, v) => a + (v.sinking ? 0 : v.type.hold), 0); // the fleet's holds count too
   ship.state.speedBonus = save.upgrades.sails ? 1.1 : 1;
 }
 // Change to another kind of ship you own (done at a shipwright).
@@ -315,6 +424,9 @@ function setShip(id) {
   persist();
 }
 ship.setType(save.ships.includes(save.shipType) ? save.shipType : 'sloop');
+// Bring back the fleet you had, lying just astern.
+save.fleet.slice(0, MAX_FLEET).forEach((f, i) => { if (SHIP_TYPES[f.type]) vessels.addFleet(f.type, f.hull > 0 ? f.hull : 1, look, { x: ship.state.x + 40 * (i % 2 ? -1 : 1), z: ship.state.z + 50 + 30 * i, heading: ship.state.heading }); });
+refreshTargets();
 applyLook();
 applyUpgrades();
 
@@ -370,7 +482,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure, vessels });
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES });
 const chart = createChart();
 const chartBtn = document.getElementById('tool-chart');
 // Treasure maps are kept with the chart. Each opens as a card you can study.
@@ -459,6 +571,8 @@ function findAction() {
     if (shore.atDinghy()) return { label: 'Row back to the ship', run: backToShip };
     return save.maps.length ? { label: 'Dig here', run: dig } : null;
   }
+  const prize = prizeNearby();
+  if (prize) return { label: 'Board the ' + prize.label.toLowerCase(), run: () => boardPrize(prize) };
   portNearby = ISLANDS.find((isl) => isl.portInfo && Math.hypot(s.x - isl.dock.x, s.z - isl.dock.z) < 110) || null;
   // Any island's beach will do if there is no dock nearby.
   beachNearby = portNearby ? null : ISLANDS.find((isl) => {
@@ -754,7 +868,7 @@ function frame() {
   if (action && actionBtn.textContent !== action.label) actionBtn.textContent = action.label;
   // Logbook: distance sailed and days at sea.
   save.distance += Math.abs(ship.state.speed) * dt;
-  if (env.hour < lastHour) { save.days++; coolOff(); }
+  if (env.hour < lastHour) { save.days++; coolOff(); payWages(); }
   lastHour = env.hour;
   if ((saveTimer -= dt) <= 0) { saveTimer = 10; saveGame(); }
   updateCamera(dt, time, first);
@@ -762,6 +876,7 @@ function frame() {
   wildlife.update(dt, time, ship.state, env, camera);
   world.ashore = ashore;
   world.wanted = isWanted();
+  pickFleetEnemy(dt);
   vessels.update(dt, time, world);
   combat.update(dt, time, targets);
   loot.update(dt, time, ashore || ship.state.sinking ? null : ship.state, wind, salvage);
@@ -793,7 +908,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.
