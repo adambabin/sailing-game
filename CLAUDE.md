@@ -104,7 +104,9 @@ Stages, in order. Each is reviewed on the private link before going to `main`:
 2 and 3 are done and approved (treasure maps; cannon, damage, sinking and repairs).
 4. Factions and enemies. Done and approved.
 5 and 6 are done and approved (spoils; capture and the player's fleet).
-7. NPC fleets: squadrons, patrols, convoys, battles in progress. Built; awaiting the owner's review. This is the last stage of the second plan.
+7. NPC fleets: squadrons, patrols, convoys, battles in progress. Done and approved.
+
+The second plan is complete. Nothing further is queued; ask the owner what they want next. Balance (enemy strength, loot and bounty amounts, ship prices against the new income) is a first guess that only automated runs have exercised, so expect to retune from their play-testing.
 
 Still open from the first plan: fixing whatever the owner reports from play-testing, and removing the temporary Time, Weather and Ship buttons once they say testing is over.
 
