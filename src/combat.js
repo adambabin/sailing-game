@@ -26,7 +26,7 @@ export function createCombat(waves, fx) {
   const puffMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }), PUFFS);
   ballMesh.frustumCulled = puffMesh.frustumCulled = false;
   group.add(ballMesh, puffMesh);
-  const balls = Array.from({ length: BALLS }, () => ({ live: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, owner: null }));
+  const balls = Array.from({ length: BALLS }, () => ({ live: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, owner: null, damage: DAMAGE }));
   const puffs = Array.from({ length: PUFFS }, () => ({ age: 9, life: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 1 }));
   const pending = []; // shots waiting their turn in a rippling broadside
   let nextBall = 0, nextPuff = 0, splashQuiet = 0;
@@ -60,7 +60,7 @@ export function createCombat(waves, fx) {
     const hx = dx * ca - dz * sa, hz = dx * sa + dz * ca;
     elev += rand(-0.012, 0.012);
     const b = balls[nextBall++ % BALLS];
-    Object.assign(b, { live: true, x: mx, y: my, z: mz, vx: hx * SPEED * Math.cos(elev) + s.vx, vy: SPEED * Math.sin(elev), vz: hz * SPEED * Math.cos(elev) + s.vz, owner: s });
+    Object.assign(b, { live: true, x: mx, y: my, z: mz, vx: hx * SPEED * Math.cos(elev) + s.vx, vy: SPEED * Math.sin(elev), vz: hz * SPEED * Math.cos(elev) + s.vz, owner: s, damage: DAMAGE * (s.power || 1) });
     puff(mx + hx, my, mz + hz, 0xffd27a, 0.9, 0.12, hx * 6, 0, hz * 6); // flash
     for (let i = 0; i < 3; i++) puff(mx + hx * (1 + i), my + rand(-0.2, 0.3), mz + hz * (1 + i), 0xdedede, rand(0.8, 1.4), rand(1.6, 2.8), hx * rand(2, 6) + s.vx * 0.5, rand(0.3, 1), hz * rand(2, 6) + s.vz * 0.5);
     fx.boom(Math.hypot(mx - fx.ear.x, mz - fx.ear.z));
@@ -105,7 +105,7 @@ export function createCombat(waves, fx) {
             b.live = false;
             for (let k = 0; k < 5; k++) puff(b.x, b.y, b.z, k < 3 ? 0x7a5233 : 0xcfc9bd, rand(0.25, 0.6), rand(0.5, 1.1), rand(-4, 4), rand(2, 6), rand(-4, 4));
             fx.crunch(Math.hypot(b.x - fx.ear.x, b.z - fx.ear.z));
-            t.hit(DAMAGE, b.owner);
+            t.hit(b.damage, b.owner);
             break;
           }
         }

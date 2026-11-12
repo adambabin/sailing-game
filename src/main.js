@@ -15,6 +15,7 @@ import { createFinds } from './finds.js';
 import { createTreasure } from './treasure.js';
 import { createCombat, inArc } from './combat.js';
 import { createVessels } from './vessels.js';
+import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted } from './factions.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -73,10 +74,21 @@ const fx = {
   splash: (d) => audio.splash(d),
   boom: (d) => audio.cannon(d),
   crunch: (d) => audio.crunch(d),
-  sunk: (v) => { audio.sink(); showToast('She is going down'); },
+  // Somebody has been hit. Firing on honest ships makes you a wanted captain.
+  struck: (v, by) => {
+    if (by !== me) return;
+    if (v.faction === 'merchant' && addWanted(0.12, 1)) showToast('You have fired on a merchant. The navy will hunt you.');
+    if (v.faction === 'navy' && addWanted(0.2, 2)) showToast('You have fired on the navy. You are a wanted captain.');
+  },
+  sunk: (v, by) => {
+    audio.sink();
+    if (by !== me) return;
+    if (v.faction === 'pirate') { save.piratesSunk++; persist(); showToast('A pirate ' + v.type.name.toLowerCase() + ' sunk. The islands are safer for it.'); }
+    else { addWanted(v.faction === 'navy' ? 2 : 1.5); showToast('You have sunk a ' + v.label.toLowerCase() + '. Every port will hear of it.'); }
+  },
 };
 const combat = createCombat(waves, fx);
-const vessels = createVessels(waves, fx);
+const vessels = createVessels(waves, fx, (shooter, side, target) => combat.fire(shooter, side, [target]));
 scene.add(combat.group, vessels.group);
 // The player's ship as the cannon code sees her: the same shape of thing as any other vessel.
 const me = {
@@ -88,12 +100,38 @@ const me = {
   get reloadTime() { return ship.type.reload; }, get hull() { return ship.state.hull; }, get sinking() { return ship.state.sinking; },
   hit(damage) {
     const s = ship.state;
-    if (s.sinking) return;
+    if (s.sinking || shore.state.active) return; // nobody fires on an empty ship at anchor
     s.hull = Math.max(0, s.hull - damage / ship.type.hullMax);
     if (s.hull <= 0) { s.sinking = 0.001; audio.sink(); showToast('She is going down!'); }
   },
 };
 const targets = [me, ...vessels.list];
+const world = { player: me, eye: camera.position, ashore: false, wanted: false };
+
+// Warnings: entering pirate waters, becoming wanted, and a tag over the nearest ship.
+const wantedChip = document.getElementById('wanted'), vesselTag = document.getElementById('vessel-tag');
+let inZone = null;
+function updateDangers() {
+  const s = ship.state, zone = zoneAt(s.x, s.z);
+  if (zone !== inZone) {
+    if (zone) showToast('Pirate waters: ' + zone.name);
+    else if (inZone) showToast('Clear of ' + inZone.name);
+    inZone = zone;
+  }
+  wantedChip.hidden = !isWanted();
+  if (isWanted()) wantedChip.textContent = 'Wanted ' + '★'.repeat(Math.floor(wanted()));
+  // Name the nearest ship, and show how she is faring.
+  let near = null, nd = 380;
+  if (!shore.state.active) for (const v of vessels.list) { if (v.gone) continue; const d = Math.hypot(v.x - s.x, v.z - s.z); if (d < nd) { nd = d; near = v; } }
+  if (near) {
+    vPos.set(near.x, near.y + near.top + 6, near.z).project(camera);
+    vesselTag.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05;
+    const text = near.sinking ? near.label + ' · sinking' : near.label + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
+    if (vesselTag.textContent !== text) vesselTag.textContent = text;
+    vesselTag.classList.toggle('foe', near.enemy === me);
+    vesselTag.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+  } else vesselTag.hidden = true;
+}
 function fire(side) {
   if (shore.state.active || !help.hidden) return;
   combat.fire(me, side, targets);
@@ -340,7 +378,7 @@ function dig() {
 }
 function toggleChart() {
   listMaps();
-  chartBtn.setAttribute('aria-expanded', String(chart.toggle(ship.state, wind)));
+  chartBtn.setAttribute('aria-expanded', String(chart.toggle(ship.state, wind, vessels.list)));
 }
 chartBtn.addEventListener('click', toggleChart);
 document.getElementById('chart-close').addEventListener('click', toggleChart);
@@ -692,14 +730,17 @@ function frame() {
   if (action && actionBtn.textContent !== action.label) actionBtn.textContent = action.label;
   // Logbook: distance sailed and days at sea.
   save.distance += Math.abs(ship.state.speed) * dt;
-  if (env.hour < lastHour) save.days++;
+  if (env.hour < lastHour) { save.days++; coolOff(); }
   lastHour = env.hour;
   if ((saveTimer -= dt) <= 0) { saveTimer = 10; saveGame(); }
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
-  vessels.update(dt, time, ship.state);
+  world.ashore = ashore;
+  world.wanted = isWanted();
+  vessels.update(dt, time, world);
   combat.update(dt, time, targets);
+  updateDangers();
   placeCrew(time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
@@ -717,7 +758,7 @@ function frame() {
   windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
   updateLabels();
-  chart.update(dt, ship.state, wind);
+  chart.update(dt, ship.state, wind, vessels.list);
   const st = ship.state;
   audio.update(dt, { wind: wind.speed, sea: sea.state, speed: st.speed, rain: env.rain, night: env.night, roll: st.roll, luffing: st.inIrons, nearLand: !!nearName });
   renderer.render(scene, camera);
@@ -727,11 +768,11 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); vessels.update(1 / 60, time, ship.state); combat.update(1 / 60, time, targets); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); }
   },
 };

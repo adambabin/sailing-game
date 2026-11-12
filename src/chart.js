@@ -5,6 +5,7 @@ import { save, cargoCount } from './save.js';
 import { GOODS } from './trade.js';
 import { SHELLS_PER_ISLAND } from './finds.js';
 import { SHIP_TYPES } from './ship.js';
+import { ZONES, wanted } from './factions.js';
 
 const WORLD = { x0: -1250, x1: 1850, z0: -2050, z1: 1450 }; // area the chart covers, in metres
 const NM = 1852;
@@ -20,7 +21,7 @@ export function createChart() {
   const X = (x) => ((x - WORLD.x0) / (WORLD.x1 - WORLD.x0)) * W, Z = (z) => ((z - WORLD.z0) / (WORLD.z1 - WORLD.z0)) * H;
   const serif = "'IM Fell English', Georgia, serif";
 
-  function draw(ship, wind) {
+  function draw(ship, wind, vessels = []) {
     g.setTransform(scale, 0, 0, scale, 0, 0);
     g.fillStyle = '#ecdcb4';
     g.fillRect(0, 0, W, H);
@@ -29,6 +30,30 @@ export function createChart() {
     for (let x = -1000; x <= 1500; x += 500) { g.beginPath(); g.moveTo(X(x), 0); g.lineTo(X(x), H); g.stroke(); }
     for (let z = -2000; z <= 1000; z += 500) { g.beginPath(); g.moveTo(0, Z(z)); g.lineTo(W, Z(z)); g.stroke(); }
 
+    // Pirate waters, hatched in red.
+    for (const zone of ZONES) {
+      g.beginPath();
+      g.arc(X(zone.x), Z(zone.z), (zone.r / (WORLD.x1 - WORLD.x0)) * W, 0, 7);
+      g.fillStyle = 'rgba(176, 58, 46, 0.13)';
+      g.fill();
+      g.setLineDash([4, 3]);
+      g.strokeStyle = 'rgba(176, 58, 46, 0.8)';
+      g.lineWidth = 1;
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = '#8f2c22';
+      g.font = `italic 10px ${serif}`;
+      g.textAlign = 'center';
+      g.fillText(zone.name, X(zone.x), Z(zone.z) + 3);
+    }
+    // Sails in sight: tan for merchants, blue for the navy, black for pirates.
+    for (const v of vessels) {
+      if (v.gone || Math.hypot(v.x - ship.x, v.z - ship.z) > 900) continue;
+      g.fillStyle = v.faction === 'pirate' ? '#1d1d22' : v.faction === 'navy' ? '#2a5fa8' : '#a07a3c';
+      g.beginPath();
+      g.arc(X(v.x), Z(v.z), 2.4, 0, 7);
+      g.fill();
+    }
     for (const isl of ISLANDS) {
       const known = save.discovered.includes(isl.name);
       if (!known && !save.rumoured.includes(isl.name)) continue;
@@ -102,6 +127,7 @@ export function createChart() {
       ['Ports visited', `${save.visited.length} of ${ports}`],
       ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
       ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
+      ['Standing', wanted() >= 1 ? `Wanted (${Math.floor(wanted())} of 5)` : save.piratesSunk ? `Honest sailor, ${save.piratesSunk} ${save.piratesSunk === 1 ? 'pirate' : 'pirates'} sunk` : 'Honest sailor'],
       ['Treasure', `${save.treasures} dug up, ${save.maps.length} ${save.maps.length === 1 ? 'map' : 'maps'} in hand`],
       ['Purse', save.coins + ' coins'],
       ['Hold', `${cargoCount()} of ${save.hold} crates` + (cargo ? ` (${cargo})` : '')],
@@ -112,15 +138,15 @@ export function createChart() {
   let timer = 0;
   return {
     get isOpen() { return !panel.hidden; },
-    toggle(ship, wind) {
+    toggle(ship, wind, vessels) {
       panel.hidden = !panel.hidden;
-      if (!panel.hidden) { draw(ship, wind); writeLog(); }
+      if (!panel.hidden) { draw(ship, wind, vessels); writeLog(); }
       return !panel.hidden;
     },
-    update(dt, ship, wind) {
+    update(dt, ship, wind, vessels) {
       if (panel.hidden || (timer -= dt) > 0) return;
       timer = 0.5;
-      draw(ship, wind);
+      draw(ship, wind, vessels);
       writeLog();
     },
   };

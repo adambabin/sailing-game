@@ -5,6 +5,7 @@ import { GOODS, TAVERNS, buyPrice, sellPrice, bestRoute } from './trade.js';
 import { ISLANDS } from './islands.js';
 import { SHIP_TYPES } from './ship.js';
 import { MAP_PRICE, MAX_MAPS } from './treasure.js';
+import { isWanted, wanted, fine, payFine, priceUp, priceDown } from './factions.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -110,7 +111,7 @@ export function createPlaces(game) {
     title.textContent = isl.name + ' market';
     const day = save.days;
     const rows = GOODS.map((good) => {
-      const buy = buyPrice(isl.name, good, day), sell = sellPrice(isl.name, good, day);
+      const buy = Math.ceil(buyPrice(isl.name, good, day) * priceUp()), sell = Math.max(1, Math.floor(sellPrice(isl.name, good, day) * priceDown()));
       const have = save.cargo[good.id] || 0;
       const room = save.hold - cargoCount();
       const trade = (n, price) => () => {
@@ -130,7 +131,11 @@ export function createPlaces(game) {
           btn('sell', `Sell ${sell}`, -1, sell, have >= 1),
           btn('sellall', 'All', -have, sell, have >= 2)));
     });
-    body.replaceChildren(h('p', { className: 'muted' }, `${keeper(isl, 'market')} keeps the stall. Prices are per crate, in coins.`), purse(), ...rows);
+    // A wanted captain gets poor prices until the fine is paid (or a few quiet days pass).
+    const notice = !isWanted() ? [] : [h('div', { className: 'trade-row warn' },
+      h('div', { className: 'ship-info' }, h('b', {}, 'You are a wanted captain'), h('div', { className: 'muted' }, `${keeper(isl, 'market')} will deal with you, at a price. The navy will not. It fades by a star each day, or the harbour will take a fine.`)),
+      h('button', { id: 'pay-fine', disabled: save.coins < fine(), onclick: () => { payFine(); game.audio.coin(); game.toast('Fine paid. You are an honest sailor again.'); market(isl); } }, `Pay ${fine()} coins`))];
+    body.replaceChildren(h('p', { className: 'muted' }, `${keeper(isl, 'market')} keeps the stall. Prices are per crate, in coins.`), purse(), ...notice, ...rows);
   }
 
   function shipwright(isl) {
