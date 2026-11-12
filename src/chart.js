@@ -95,7 +95,7 @@ export function createChart() {
     const ports = ISLANDS.filter((i) => i.portInfo).length;
     const cargo = GOODS.filter((x) => save.cargo[x.id]).map((x) => `${save.cargo[x.id]} ${x.name.toLowerCase()}`).join(', ');
     const rows = [
-      ['Ship', SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop'],
+      ['Ship', (SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop') + (save.ship.hull < 0.995 ? `, hull at ${Math.round(save.ship.hull * 100)}%` : '')],
       ['Day', save.days],
       ['Sailed', (save.distance / NM).toFixed(1) + ' nautical miles'],
       ['Islands found', `${save.discovered.length} of ${ISLANDS.length}`],

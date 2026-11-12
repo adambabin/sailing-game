@@ -13,6 +13,8 @@ import { createWildlife } from './wildlife.js';
 import { createPeople, buildPerson } from './people.js';
 import { createFinds } from './finds.js';
 import { createTreasure } from './treasure.js';
+import { createCombat, inArc } from './combat.js';
+import { createVessels } from './vessels.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -51,21 +53,97 @@ const sky = createSky();
 const ship = createShip(waves);
 // Pick up where the last session left off, as long as that spot is still open water.
 if (save.ship.x !== undefined && terrainHeight(save.ship.x, save.ship.z) < -3) {
-  Object.assign(ship.state, { x: save.ship.x, z: save.ship.z, heading: save.ship.heading, sail: save.ship.sail, anchorDown: save.ship.anchor, anchorDepth: save.ship.anchor ? 1 : 0, speed: 0 });
+  Object.assign(ship.state, { x: save.ship.x, z: save.ship.z, heading: save.ship.heading, sail: save.ship.sail, anchorDown: save.ship.anchor, anchorDepth: save.ship.anchor ? 1 : 0, speed: 0, hull: save.ship.hull > 0 ? save.ship.hull : 1 });
   env.hour = save.ship.hour;
 }
 function saveGame() {
   const s = ship.state;
-  save.ship = { x: s.x, z: s.z, heading: s.heading, sail: s.sail, anchor: s.anchorDown, hour: env.hour };
+  if (s.sinking) return; // nothing to save while she is going down
+  save.ship = { x: s.x, z: s.z, heading: s.heading, sail: s.sail, anchor: s.anchorDown, hour: env.hour, hull: s.hull };
   persist();
 }
 const windFx = createWindFx();
 const shore = createShore();
 const wildlife = createWildlife(waves, { foam: foamAt, splash: (distance) => audio.splash(distance) });
 scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy, wildlife.group);
+// ---- Fighting: cannon, other ships, damage ----------------------------------------
+const fx = {
+  foam: foamAt,
+  ear: camera.position, // sounds are quieter the further they are from here
+  splash: (d) => audio.splash(d),
+  boom: (d) => audio.cannon(d),
+  crunch: (d) => audio.crunch(d),
+  sunk: (v) => { audio.sink(); showToast('She is going down'); },
+};
+const combat = createCombat(waves, fx);
+const vessels = createVessels(waves, fx);
+scene.add(combat.group, vessels.group);
+// The player's ship as the cannon code sees her: the same shape of thing as any other vessel.
+const me = {
+  faction: 'player', reload: { port: 0, stbd: 0 }, gone: false, aim: 1,
+  get x() { return ship.state.x; }, get z() { return ship.state.z; }, get y() { return ship.state.y; },
+  get heading() { return ship.state.heading; },
+  get vx() { return Math.sin(ship.state.heading) * ship.state.speed; }, get vz() { return Math.cos(ship.state.heading) * ship.state.speed; },
+  get size() { return ship.type.size; }, get top() { return ship.type.top; }, get guns() { return ship.guns; },
+  get reloadTime() { return ship.type.reload; }, get hull() { return ship.state.hull; }, get sinking() { return ship.state.sinking; },
+  hit(damage) {
+    const s = ship.state;
+    if (s.sinking) return;
+    s.hull = Math.max(0, s.hull - damage / ship.type.hullMax);
+    if (s.hull <= 0) { s.sinking = 0.001; audio.sink(); showToast('She is going down!'); }
+  },
+};
+const targets = [me, ...vessels.list];
+function fire(side) {
+  if (shore.state.active || !help.hidden) return;
+  combat.fire(me, side, targets);
+}
+const firePort = document.getElementById('btn-fire-port'), fireStbd = document.getElementById('btn-fire-stbd');
+firePort.addEventListener('click', () => fire(1));
+fireStbd.addEventListener('click', () => fire(-1));
+const hullFill = document.getElementById('hull-fill');
+const HOME = { x: 150, z: -385 }; // the anchorage off Port Marigold, where a sunk captain washes up
+
+// The ship has gone down: cargo and ship are lost, and you start again from port in a sloop.
+function lostAtSea() {
+  const s = ship.state, lost = ship.type.name.toLowerCase(), wasSloop = ship.typeId === 'sloop';
+  const crates = Object.values(save.cargo).reduce((a, n) => a + n, 0);
+  save.cargo = {};
+  if (!wasSloop) save.ships = save.ships.filter((id) => id !== ship.typeId);
+  setShip('sloop');
+  Object.assign(s, { x: HOME.x, z: HOME.z, heading: Math.PI, speed: 0, sail: 0, anchorDown: true, anchorDepth: 1, hull: 1, sinking: 0, roll: 0, pitch: 0 });
+  anchorBtn.setAttribute('aria-pressed', 'true');
+  cam.deck = false;
+  viewBtn.setAttribute('aria-expanded', 'false');
+  first = true;
+  saveGame();
+  places.show('Lost at sea', [
+    `Your ${lost} is gone` + (crates ? `, and ${crates} crates of cargo with her.` : '.'),
+    'Fishermen pulled you from the water and brought you in to Port Marigold.',
+    wasSloop ? 'The shipwright has found you another sloop. Your purse is untouched.' : `There is a sloop waiting for you. Your purse${save.ships.length > 1 ? ' and your other ships are' : ' is'} untouched.`,
+  ]);
+}
+
+// Deckhands, standing by the guns. Purely for show.
+const crew = Array.from({ length: 5 }, (_, i) => {
+  const c = buildPerson({ shirt: [0xd98a5a, 0x7fb5c9, 0xe8c648, 0xc9605a, 0x8fbf7a][i], trousers: 0x5a4a3a, skin: [0xb5774f, 0xd9a47a, 0x8a5a3c, 0xe8c09a, 0xb5774f][i], hair: 0x2a1d14, hat: i % 2 ? 'scarf' : 'none', scarf: 0xd9453c, scale: 1 });
+  ship.root.add(c.group);
+  return c;
+});
+function placeCrew(time) {
+  const spots = ship.crewSpots;
+  crew.forEach((c, i) => {
+    c.group.visible = i < spots.length;
+    if (!c.group.visible) return;
+    c.group.position.copy(spots[i]);
+    c.group.rotation.y = (i % 2 ? -1 : 1) * Math.PI / 2 + Math.sin(time * 0.3 + i * 2) * 0.5; // looking out over the rail
+    c.arms[0].rotation.x = c.arms[1].rotation.x = Math.sin(time * 0.9 + i) * 0.12;
+  });
+}
+
 const captain = buildPerson({ shirt: 0xf3efe2, trousers: 0x2c3f63, skin: 0xd9a47a, hat: 'straw', sash: 0xd9453c, scale: 1.1 });
 ship.root.add(captain.group);
-applyPaint(captain.group);
+applyPaint(ship.root);
 const people = createPeople();
 const finds = createFinds();
 const treasure = createTreasure();
@@ -377,6 +455,8 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyM') cycleSound();
   else if (e.code === 'KeyC') toggleChart();
   else if (e.code === 'KeyV') toggleView();
+  else if (e.code === 'Digit1' && !e.repeat) fire(1);
+  else if (e.code === 'Digit2' && !e.repeat) fire(-1);
   else if (e.code === 'KeyB') tryNextShip();
   else if (e.code === 'KeyE' && !e.repeat) doAction();
   else if (e.code === 'Enter' || e.code === 'Escape') {
@@ -535,6 +615,7 @@ function updateHud(dt) {
 
   let text = '', warn = false;
   if (shore.state.active) text = !action && !places.isOpen && shore.state.onWood && shore.state.island.portInfo ? 'Walk up into the village to find the tavern, shipwright and market.' : '';
+  else if (s.sinking) { text = 'She is lost. Abandon ship!'; warn = true; }
   else if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
   else if (s.anchorDepth > 0.9) text = action ? '' : s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
   else if ((portNearby || beachNearby) && s.speed < 6) text = 'Drop anchor here to go ashore at ' + (portNearby || beachNearby).name + '.';
@@ -581,7 +662,11 @@ function frame() {
   const ashore = shore.state.active;
   // On foot the same keys walk the sailor, and the ship rides quietly at anchor.
   readPush();
-  const input = ashore ? { steer: 0, sail: 0 } : { steer: push.x, sail: push.y };
+  const sunk = ship.state.sinking > 0;
+  const input = ashore || sunk ? { steer: 0, sail: 0 } : { steer: push.x, sail: push.y };
+  if (sunk && (ship.state.sinking += dt) > 7) lostAtSea();
+  // Riding at anchor, the crew patch what they can. Proper repairs need a shipwright.
+  if (ship.state.anchorDepth > 0.9 && ship.state.hull < 0.6 && !sunk) ship.state.hull = Math.min(0.6, ship.state.hull + dt * 0.008);
   ship.update(dt, time, input, wind);
   if (ashore) {
     // Turn the push into a direction on the ground, measured from where the camera is looking.
@@ -613,6 +698,16 @@ function frame() {
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
+  vessels.update(dt, time, ship.state);
+  combat.update(dt, time, targets);
+  placeCrew(time);
+  // Fire buttons: show the reload, and light up when someone is in the guns' arc.
+  for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
+    btn.style.setProperty('--load', (me.reload[key] / me.reloadTime).toFixed(3));
+    btn.classList.toggle('aim', me.reload[key] <= 0 && vessels.list.some((v) => !v.sinking && !v.gone && inArc(me, side, v)));
+  }
+  hullFill.style.width = Math.round(ship.state.hull * 100) + '%';
+  hullFill.className = ship.state.hull < 0.3 ? 'grave' : ship.state.hull < 0.6 ? 'hurt' : '';
   treasure.update();
   people.update(dt, time, env, ashore ? shore.state : ship.state, ashore ? shore.state : null);
   updateWake(dt, time);
@@ -632,11 +727,11 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); vessels.update(1 / 60, time, ship.state); combat.update(1 / 60, time, targets); }
   },
 };

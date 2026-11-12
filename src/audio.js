@@ -193,6 +193,28 @@ export function createAudio() {
       burst('lowpass', 500, 0.3, 0.16);
       burst('highpass', 2200, 0.05, 0.22, ctx.currentTime + 0.05);
     },
+    // Cannon fire, quieter and duller the further off it is.
+    cannon(distance = 0) {
+      if (!ctx) return;
+      const near = 1 / (1 + distance / 90), now = ctx.currentTime;
+      burst('lowpass', 900 - 500 * (1 - near), 0.9 * near, 0.35);
+      tone('sine', 70, 0.5 * near, 0.005, 0.5, fx, now, 38);
+      burst('lowpass', 260, 0.35 * near, 1.4, now + 0.05);
+    },
+    // A ball smashing into timber.
+    crunch(distance = 0) {
+      if (!ctx) return;
+      const near = 1 / (1 + distance / 60);
+      burst('bandpass', rand(700, 1200), 0.45 * near, 0.18, ctx.currentTime, 1.2);
+      burst('lowpass', 300, 0.3 * near, 0.3);
+    },
+    // A ship going down: a long groan and rush of water.
+    sink() {
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      tone('sawtooth', 90, 0.05, 0.4, 3.5, fx, now, 45);
+      burst('lowpass', 500, 0.3, 4.5, now + 0.5);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;

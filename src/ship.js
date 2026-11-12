@@ -265,6 +265,24 @@ function squareSail(parent, C, o) {
   };
 }
 
+// A row of cannon down each side of the deck. Returns where the port-side guns sit;
+// the starboard ones mirror them.
+function gunRow(m, C, hull, zs) {
+  const guns = [];
+  for (const z of zs) {
+    const x = hull.halfAt(z) * 0.8, y = hull.deckAt(z) + 0.42;
+    guns.push({ x, y, z });
+    for (const side of [1, -1]) {
+      const barrel = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 1.35, 8)), 0x2b2d33);
+      barrel.rotation.z = (-side * Math.PI) / 2;
+      barrel.position.set(side * (x + 0.25), y, z);
+      m.add(barrel);
+      box(m, 0.75, 0.3, 0.55, C.wood, side * (x - 0.1), y - 0.25, z);
+    }
+  }
+  return guns;
+}
+
 // ---- The ships ------------------------------------------------------------------
 // Each kind of ship: what she costs and carries, how she handles, and how to build her.
 // The builder adds everything to `m` and returns the per-frame sail functions plus a few
@@ -294,6 +312,7 @@ function buildSloop(m, C) {
     ],
     flag: V(0, MAST_TOP - 0.2, MAST_Z), anchor: V(-1.25, 1.35, 5.2), lantern: V(0, 2.55, -5.7), rudder: V(0, -0.1, -6), rudderSize: 1,
     helm: V(0, 3.05, -4.75), // where your eyes are when you stand at the wheel
+    guns: gunRow(m, C, hull, [-0.2, 2.9]), crew: [V(0.7, hull.deckAt(3.8), 3.8)],
   };
 }
 
@@ -346,13 +365,15 @@ function buildSquareRigger(m, C, o) {
     flag: V(0, tallest.y - 0.2, tallest.z), anchor: V(-hull.halfAt(bowZ - 5) * 0.95, hull.deckAt(bowZ - 5) + 0.3, bowZ - 5),
     lantern: V(0, hull.deckAt(sternZ + 0.6) + 1.75, sternZ + 0.5), rudder: V(0, -0.2, sternZ), rudderSize: o.rudder,
     helm: V(0, hull.deckAt(o.helmZ) + o.helmUp + 1.75, o.helmZ),
+    guns: gunRow(m, C, hull, o.guns), crew: o.crew.map((z, i) => V(i % 2 ? 0.9 : -0.9, hull.deckAt(z), z)),
   };
 }
 
 const BRIG = {
   hull: { z0: -10, len: 21, beam: 6.4, sternW: 0.74, deck: 2.1, sheer: 0.8, bowF: 1.4, sternF: 1.5, draft: 1.7, bowRise: 2.6, sternRise: 0.6 },
   decks: [{ z0: -9.6, z1: -5, h: 1.5, rail: 'fore', windows: 3 }],
-  hatchZ: 0.5, sprit: 6.5, jibs: 2, rudder: 1.5, helmZ: -7.6, helmUp: 1.5, // the wheel stands on the raised deck aft. The lowest sails are cut high enough to see under from there.
+  hatchZ: 0.5, sprit: 6.5, jibs: 2, rudder: 1.5, helmZ: -7.6, helmUp: 1.5,
+  guns: [-4, -2, 1.9, 3.4, 6.2], crew: [-1.2, 2.6, 6.8], // the wheel stands on the raised deck aft. The lowest sails are cut high enough to see under from there.
   masts: [
     { z: 4.6, h: 24, sails: [{ y: 9.5, w: 10.5, h: 5.4 }, { y: 16.3, w: 8.5, h: 6.2 }, { y: 21.8, w: 6.5, h: 4.8 }] },
     { z: -3.2, h: 27, sails: [{ y: 11.5, w: 11.5, h: 6 }, { y: 18.8, w: 9.3, h: 6.6 }, { y: 24.6, w: 7, h: 5.2 }], spanker: { up: 4.4, boom: 7.2, hoist: 6.2, peakRise: 3, peakBack: 5.2 } },
@@ -363,6 +384,7 @@ const GALLEON = {
   hull: { z0: -14, len: 29, beam: 8.6, sternW: 0.8, deck: 3.0, sheer: 1.2, bowF: 1.3, sternF: 2.4, draft: 2.3, bowRise: 3.4, sternRise: 0.9 },
   decks: [{ z0: -13.5, z1: -7.5, h: 2.4, rail: 'fore', windows: 4 }, { z0: -13.5, z1: -10.5, h: 4.3, rail: 'fore', windows: 3 }, { z0: 6.5, z1: 11.5, h: 1.6, rail: 'aft' }],
   hatchZ: 2.2, sprit: 9, jibs: 2, rudder: 2.1, helmZ: -9.2, helmUp: 2.4,
+  guns: [-6.6, -5, -3.4, -1.8, 0.6, 3.8, 5.2, 6.2], crew: [-5.5, -2.5, 0.8, 4.2, 5.8],
   masts: [
     { z: 8.8, h: 29, sails: [{ y: 13, w: 13.5, h: 7.2 }, { y: 21.5, w: 10.8, h: 7.6 }, { y: 27, w: 8, h: 5 }] },
     { z: -0.6, h: 34, sails: [{ y: 13.5, w: 15, h: 7.6 }, { y: 23, w: 12, h: 8.6 }, { y: 31, w: 9, h: 7 }] },
@@ -370,22 +392,26 @@ const GALLEON = {
   ],
 };
 
-// price: coins at a shipwright. hold: crates. speed/turn/accel: handling. pointing: how many
+// price: coins at a shipwright. hold: crates. hullMax: how much damage she can take. reload: seconds between broadsides.
+// speed/turn/accel: handling. pointing: how many
 // degrees further off the wind she must sail than the sloop. size: where she touches the water.
 export const SHIP_TYPES = {
   sloop: {
     name: 'Sloop', blurb: 'One mast, quick to turn, sails closest to the wind.', price: 0, hold: 20,
     speed: 1, turn: 0.55, accel: 0.3, pointing: 0, heel: 0.19, draft: 1.3,
+    hullMax: 100, reload: 5, top: 3, // top: how high above the water a cannonball can strike her
     size: { bow: 6, stern: -5, half: 1.9 }, cam: { dist: 34, height: 4, min: 14 }, build: buildSloop,
   },
   brig: {
     name: 'Brig', blurb: 'Two masts of square sails. Carries more than twice the cargo, turns more slowly.', price: 900, hold: 45,
     speed: 1.12, turn: 0.4, accel: 0.22, pointing: 9, heel: 0.15, draft: 1.9,
+    hullMax: 220, reload: 6.5, top: 4.5,
     size: { bow: 10, stern: -9, half: 2.8 }, cam: { dist: 54, height: 7, min: 22 }, build: (m, C) => buildSquareRigger(m, C, BRIG),
   },
   galleon: {
     name: 'Galleon', blurb: 'Three masts and a high stern. Fastest with the wind behind her, a vast hold, stately in the turn.', price: 2800, hold: 90,
     speed: 1.22, turn: 0.28, accel: 0.16, pointing: 15, heel: 0.11, draft: 2.5,
+    hullMax: 400, reload: 8, top: 7,
     size: { bow: 14, stern: -13, half: 3.8 }, cam: { dist: 76, height: 10, min: 30 }, build: (m, C) => buildSquareRigger(m, C, GALLEON),
   },
 };
@@ -474,6 +500,8 @@ export function createShip(waves) {
     relWind: 0, // signed angle of the wind relative to the bow, for the dial
     y: 0, pitch: 0, roll: 0,
     halfBeam: 1.9, bow: 6, stern: -5, // size of the current ship, for the wake and for dolphins
+    hull: 1, // how sound the hull is: 1 = undamaged, 0 = sinking
+    sinking: 0, // seconds since she started to go down (0 = afloat)
   };
   const ctx = { r: 0, tack: 1, ease: 0, fill: 0, luff: 0, time: 0 };
 
@@ -498,7 +526,9 @@ export function createShip(waves) {
     const windRatio = wind.speed / 14;
     const windFactor = windRatio < 1 ? windRatio : Math.pow(windRatio, 0.6);
     s.inIrons = eff < 0.05 && s.sail > 0.15;
-    const target = s.anchorDepth > 0.9 ? 0 : MAX_SPEED * type.speed * (s.speedBonus || 1) * eff * s.sail * windFactor;
+    // A holed ship is a slow ship.
+    const sound = s.sinking ? 0 : 0.55 + 0.45 * s.hull;
+    const target = s.anchorDepth > 0.9 ? 0 : MAX_SPEED * type.speed * (s.speedBonus || 1) * eff * s.sail * windFactor * sound;
     s.speed += (target - s.speed) * (target > s.speed ? type.accel : type.accel * 0.55) * dt;
     s.anchorDepth = THREE.MathUtils.clamp(s.anchorDepth + (s.anchorDown ? dt / 1.4 : -dt / 2), 0, 1);
     if (s.anchorDepth > 0.9) s.speed -= s.speed * Math.min(1, dt * 1.6);
@@ -541,8 +571,10 @@ export function createShip(waves) {
     const lean = -turn * Math.min(1, s.speed / 6) * 0.12;
     s.roll += (Math.atan2(hPort - hStbd, size.half * 2) * 0.6 + heel + lean - s.roll) * Math.min(1, dt * 3);
 
-    root.position.set(s.x, s.y + 0.3, s.z);
-    root.rotation.set(s.pitch, s.heading, s.roll);
+    // A damaged ship sits lower; a sinking one rolls over and goes down.
+    const low = (1 - s.hull) * 0.5 + s.sinking * s.sinking * 0.22;
+    root.position.set(s.x, s.y + 0.3 - low, s.z);
+    root.rotation.set(s.pitch - Math.min(0.35, s.sinking * 0.04), s.heading, s.roll + Math.min(1.1, s.sinking * 0.14));
     rudder.rotation.y = -s.rudder * 0.6;
     wheel.rotation.z = -s.rudder * 2.2;
 
@@ -595,10 +627,36 @@ export function createShip(waves) {
     setType,
     lanternLight,
     helm,
+    get guns() { return rig.guns; },
+    get crewSpots() { return rig.crew; },
     get type() { return type; },
     get typeId() { return typeId; },
     get knots() {
       return state.speed / KNOT;
     },
   };
+}
+
+// A ship for someone else to sail (merchants, navy, pirates). She is built exactly like the
+// player's, but her sails are set once and left alone, which is far cheaper to draw.
+export function buildNpcModel(typeId, look) {
+  const type = SHIP_TYPES[typeId];
+  const group = new THREE.Group();
+  group.rotation.order = 'YXZ';
+  const rig = type.build(group, SHIP_COLORS);
+  const flagGeo = new THREE.PlaneGeometry(2.4, 0.9, 1, 1);
+  flagGeo.translate(-1.2, 0, 0);
+  const flag = paint(new THREE.Mesh(flagGeo), look.flag, { double: true, part: 'flag' });
+  flag.position.copy(rig.flag);
+  flag.rotation.y = Math.PI / 2;
+  group.add(flag);
+  const c = { r: 1, tack: 1, ease: 1.0, fill: 1, luff: 0, time: 0 };
+  for (const shape of rig.sails) shape(c);
+  group.traverse((o) => {
+    const p = o.userData.paint;
+    if (p && p.part && look[p.part] !== undefined) p.color = look[p.part];
+    if (o.isMesh && o.frustumCulled === false) { o.geometry.computeBoundingSphere(); o.frustumCulled = true; }
+  });
+  applyPaint(group);
+  return { group, type, guns: rig.guns };
 }

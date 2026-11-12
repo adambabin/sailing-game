@@ -1,10 +1,10 @@
 // Life at sea: gulls wheeling near land, dolphins that come to play at the bow,
-// flying fish, and other ships going about their business in the distance.
+// and flying fish. (Other ships live in vessels.js.)
 
 import * as THREE from 'three';
 import { paint, applyPaint } from './materials.js';
 import { waveHeight } from './waves.js';
-import { ISLANDS, islandCoast, nightLights } from './islands.js';
+import { ISLANDS, islandCoast } from './islands.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -46,66 +46,6 @@ function buildDolphin() {
   return { group: g, x: 0, z: 0, phase: 0, wasUp: false };
 }
 
-// ---- Other ships ------------------------------------------------------------------
-// A square sail: a sheet bowed forward by the wind, hung from a yard.
-function squareSail(g, color, w, h, y, z) {
-  const geo = new THREE.PlaneGeometry(w, h, 6, 3);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const u = pos.getX(i) / (w / 2), v = pos.getY(i) / (h / 2);
-    pos.setZ(i, (1 - u * u) * (1 - v * v * 0.5) * w * 0.17);
-  }
-  geo.computeVertexNormals();
-  const sail = paint(new THREE.Mesh(geo), color, { double: true });
-  sail.position.set(0, y, z + 0.3);
-  const yard = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, w + 1, 6)), 0x5a3e26);
-  yard.rotation.z = Math.PI / 2;
-  yard.position.set(0, y + h / 2, z + 0.25);
-  g.add(sail, yard);
-}
-
-function buildMerchant(hullColor, sailColor) {
-  const g = new THREE.Group();
-  const hull = paint(new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)), hullColor, { double: true });
-  hull.scale.set(3.3, 4.2, 12.5);
-  hull.position.y = 2.6;
-  const deck = paint(new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.2, 14)), 0xc9a06c);
-  deck.scale.set(3.25, 1, 12.4);
-  deck.position.y = 2.5;
-  const rail = paint(new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.9, 5)), hullColor);
-  rail.position.set(0, 3.3, -8.2);
-  const sprit = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 8, 6)), 0x5a3e26);
-  sprit.rotation.x = Math.PI / 2 - 0.25;
-  sprit.position.set(0, 4.2, 13.5);
-  g.add(hull, deck, rail, sprit);
-  for (const [z, h] of [[4.5, 22], [-3.2, 25]]) {
-    const mast = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, h, 6)), 0x5a3e26);
-    mast.position.set(0, h / 2 + 2.5, z);
-    g.add(mast);
-    squareSail(g, sailColor, 11.5, 8.5, 2.5 + h * 0.36, z);
-    squareSail(g, sailColor, 9, 7, 2.5 + h * 0.74, z);
-  }
-  // A jib out to the bowsprit.
-  const jibGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 5.2, 16.5), new THREE.Vector3(0, 20, 5), new THREE.Vector3(0.9, 5.6, 6.5)]);
-  jibGeo.computeVertexNormals();
-  g.add(paint(new THREE.Mesh(jibGeo), sailColor, { double: true }));
-  const lamp = paint(new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6)), 0xffd98a, { glow: true });
-  lamp.position.set(0, 5.4, -10.6);
-  nightLights.push(lamp);
-  g.add(lamp);
-  g.rotation.order = 'YXZ';
-  return g;
-}
-
-// A random spot of open water, well clear of every island.
-function openWater() {
-  for (let i = 0; i < 40; i++) {
-    const x = rand(-1700, 2000), z = rand(-2200, 1600);
-    if (islandCoast(x, z) < -0.95) return { x, z };
-  }
-  return { x: 0, z: 300 };
-}
-
 // `fx` supplies foam(x, z, size) and splash() so wildlife can disturb the water.
 export function createWildlife(waves, fx) {
   const group = new THREE.Group();
@@ -127,14 +67,6 @@ export function createWildlife(waves, fx) {
     return { mesh: m, t: 2, x: 0, z: 0, dx: 0, dz: 0, delay: 0 };
   });
   let fishWait = rand(8, 16);
-
-  const looks = [[0x5a3a2a, 0xf1e8d2], [0x2b3a4e, 0xe9dcc0], [0x6e2f2a, 0xf4efe2]];
-  const merchants = looks.map(([hullColor, sailColor], i) => {
-    const mesh = buildMerchant(hullColor, sailColor);
-    group.add(mesh);
-    const start = openWater();
-    return { mesh, x: start.x, z: start.z, heading: rand(0, 6.28), goal: openWater(), speed: 3.2 + i * 0.5, bob: rand(0, 6) };
-  });
 
   applyPaint(group);
 
@@ -241,21 +173,7 @@ export function createWildlife(waves, fx) {
       if (was === 0 || f.t >= 1) fx.foam(x, z, 0.3);
     }
 
-    // --- Other ships wander between random points of open sea, steering clear of land and of you.
-    for (const m of merchants) {
-      if (Math.hypot(m.goal.x - m.x, m.goal.z - m.z) < 120) m.goal = openWater();
-      let want = Math.atan2(m.goal.x - m.x, m.goal.z - m.z);
-      const ax = m.x + Math.sin(m.heading) * 170, az = m.z + Math.cos(m.heading) * 170;
-      if (islandCoast(ax, az) > -0.75 || Math.hypot(ship.x - ax, ship.z - az) < 110) want = m.heading - 1.2;
-      let diff = want - m.heading;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      m.heading += THREE.MathUtils.clamp(diff, -0.12 * dt, 0.12 * dt);
-      m.x += Math.sin(m.heading) * m.speed * dt;
-      m.z += Math.cos(m.heading) * m.speed * dt;
-      m.mesh.position.set(m.x, waveHeight(waves, m.x, m.z, time) * 0.5 + 0.3, m.z);
-      m.mesh.rotation.set(Math.sin(time * 0.5 + m.bob) * 0.03, m.heading, Math.sin(time * 0.37 + m.bob) * 0.05);
-    }
   }
 
-  return { group, update, pod, merchants, dolphins };
+  return { group, update, pod, dolphins };
 }

@@ -18,6 +18,7 @@
   --muted: #b9c9cf;
   --brass: #f0c05a;
   --coral: #ff7b63;
+  --good: #7fd6a4;
   --display: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
   --body: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
   --gap-l: max(16px, env(safe-area-inset-left, 0px));
@@ -76,7 +77,14 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 .treasure-map { display: block; width: 100%; max-width: 280px; aspect-ratio: 1; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
 #action { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 3; max-width: calc(100vw - 300px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); }
 .place-label { position: fixed; top: 0; left: 0; padding: 3px 10px; border-radius: 7px; background: var(--panel); border: 1px solid var(--line); font-family: var(--display); font-size: 17px; pointer-events: none; white-space: nowrap; }
-.ashore #btn-anchor, .ashore #dial { display: none; }
+.ashore #btn-anchor, .ashore #dial, .ashore .fire { display: none; }
+#hull-bar { position: absolute; left: 12px; right: 12px; bottom: 3px; height: 3px; border-radius: 2px; background: rgba(246, 236, 210, 0.18); overflow: hidden; }
+#hull-fill { display: block; height: 100%; width: 100%; background: var(--good); transition: width 0.3s; }
+#hull-fill.hurt { background: var(--brass); }
+#hull-fill.grave { background: var(--coral); }
+/* A fire button fills round like a clock while the guns reload, and lights up when a ship is in their arc. */
+.pad .fire { --load: 0; background: conic-gradient(rgba(246, 236, 210, 0.42) calc(var(--load) * 1turn), var(--panel) 0); }
+.pad .fire.aim { border-color: var(--brass); box-shadow: 0 0 0 2px var(--brass); }
 #toast { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 8px 18px; font-family: var(--display); font-size: 20px; text-align: center; max-width: min(80vw, 420px); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
 #toast.show { opacity: 1; }
 #hint { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); padding: 7px 14px; font-weight: 700; text-align: center; max-width: 80vw; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
@@ -125,6 +133,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   <div class="gauge"><small>Sails</small><b><i id="g-sail" style="font-style:normal">0</i><span>%</span></b></div>
   <div class="gauge"><small id="g-windname">Wind</small><b><i id="g-wind" style="font-style:normal">0</i><span>kn</span></b></div>
   <div class="gauge"><small>Time</small><b id="g-time">12:00</b></div>
+  <div id="hull-bar" role="img" aria-label="Hull"><i id="hull-fill"></i></div>
 </div>
 
 <div id="topright">
@@ -177,6 +186,8 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 </div>
 <div id="stick-hint">Steer &middot; Sails</div>
 <div id="pad-right" class="pad">
+  <button id="btn-fire-port" class="panel fire" aria-label="Fire the port (left) guns"><span>&#9664;<small>Fire</small></span></button>
+  <button id="btn-fire-stbd" class="panel fire" aria-label="Fire the starboard (right) guns"><span>&#9654;<small>Fire</small></span></button>
   <button id="btn-anchor" class="panel" aria-pressed="false" aria-label="Drop or weigh anchor"><span>&#9875;<small>Anchor</small></span></button>
 </div>
 
@@ -192,6 +203,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
       <dt>E</dt><dd>Go ashore, visit a place, row back</dd>
       <dt>C</dt><dd>Chart and logbook</dd>
+      <dt>1 / 2</dt><dd>Fire the port / starboard guns</dd>
       <dt>V</dt><dd>Stand at the wheel, or look from astern</dd>
       <dt>M</dt><dd>Sound, no music, or muted</dd>
     </dl>

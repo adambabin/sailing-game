@@ -192,6 +192,14 @@ export function createPlaces(game) {
           },
         }, current ? 'Your ship' : tooFull ? 'Hold too full' : owned ? 'Sail her' : `${t.price} coins`));
     });
+    // Mending battle damage.
+    const st = game.ship.state, cost = Math.ceil((1 - st.hull) * game.ship.type.hullMax * 0.6);
+    const repair = h('div', { className: 'trade-row' },
+      h('div', {}, h('b', {}, 'Repair the hull'), h('span', { className: 'muted' }, cost ? ` she is at ${Math.round(st.hull * 100)}%` : ' she is sound')),
+      h('button', {
+        id: 'repair', disabled: !cost || save.coins < cost,
+        onclick: () => { save.coins -= cost; st.hull = 1; game.audio.coin(); persist(); shipwright(isl); },
+      }, cost ? `${cost} coins` : 'No damage'));
     const upgrades = UPGRADES.map((u) => {
       const has = !!save.upgrades[u.id];
       return h('div', { className: 'trade-row' },
@@ -211,6 +219,7 @@ export function createPlaces(game) {
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'shipwright')} wipes their hands and shows you what is in stock.`),
       purse(),
+      repair,
       h('h3', {}, 'Ships'),
       ...ships,
       h('p', { className: 'muted' }, 'Ships you own are kept for you at every shipwright. Your paint goes with you.'),
