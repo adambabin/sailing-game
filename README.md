@@ -10,8 +10,9 @@ Play it: https://adambabin.github.io/sailing-game/
 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
-| Steer to port / starboard | `A` / `D` or arrow keys | ◀ ▶ buttons |
-| Raise / lower sails | `W` / `S` or arrow keys | ▲ ▼ buttons |
+| Steer to port / starboard | `A` / `D` or arrow keys | Joystick left / right |
+| Raise / lower sails | `W` / `S` or arrow keys | Joystick up / down |
+| Walk ashore | The same keys | Joystick, any direction |
 | Drop / weigh anchor | `Space` | ⚓ button |
 | Look around (turn your head at the wheel) | Drag with the mouse | Drag with a finger |
 | Zoom | Scroll wheel | Pinch |
@@ -33,7 +34,8 @@ sea gets rougher as the wind rises. Above about 13 knots you can see the wind
 as pale ribbons streaming past. A full day lasts about 20 minutes.
 
 Five islands have a port. Drop anchor near the dock and go ashore: on foot
-the same keys walk and turn. Each port has a tavern (local talk and trade
+the joystick (or the same keys) walks you in any direction and the view swings
+round to follow. Each port has a tavern (local talk and trade
 tips), a market (buy cargo cheap, sell it dear elsewhere) and a shipwright
 (paints, sail cloth and upgrades, paid for with coins), each minded by someone
 you walk up to. Villagers stroll about by day and will return a greeting, and

@@ -74,14 +74,21 @@ export function createShore() {
       const s = state;
       return Math.hypot(s.x - s.boat.x, s.z - s.boat.z) < s.boat.reach;
     },
-    // Walk with the same keys as the ship: left/right turn, up/down walk. Returns true on each footstep.
-    update(dt, held, frozen) {
+    // Walk in the direction of `move` (a world-space push of length 0 to 1), turning to face it.
+    // Returns true on each footstep.
+    update(dt, move, frozen) {
       const s = state;
-      const turn = frozen ? 0 : (held.left ? 1 : 0) - (held.right ? 1 : 0);
-      const move = frozen ? 0 : (held.up ? 1 : 0) - (held.down ? 0.55 : 0);
-      s.heading += turn * TURN_SPEED * dt;
-      const fx = Math.sin(s.heading), fz = Math.cos(s.heading);
-      const dx = fx * move * WALK_SPEED * dt, dz = fz * move * WALK_SPEED * dt;
+      let mx = frozen ? 0 : move.x, mz = frozen ? 0 : move.z;
+      const push = Math.min(1, Math.hypot(mx, mz));
+      if (push > 0.05) {
+        const scale = push / Math.hypot(mx, mz); // a push harder than 1 still walks at full speed, no faster
+        mx *= scale;
+        mz *= scale;
+        let diff = Math.atan2(mx, mz) - s.heading;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        s.heading += THREE.MathUtils.clamp(diff, -TURN_SPEED * 4 * dt, TURN_SPEED * 4 * dt);
+      } else mx = mz = 0;
+      const dx = mx * WALK_SPEED * dt, dz = mz * WALK_SPEED * dt;
       const before = s.x + s.z;
       if (walkable(s.x + dx, s.z + dz)) { s.x += dx; s.z += dz; }
       else if (walkable(s.x + dx, s.z)) s.x += dx; // slide along whatever is in the way
@@ -94,7 +101,7 @@ export function createShore() {
       let stepped = false;
       if (s.moving) {
         const prev = s.stride;
-        s.stride += dt * 9;
+        s.stride += dt * (4 + 5 * push);
         stepped = Math.floor(prev / Math.PI) !== Math.floor(s.stride / Math.PI);
       } else s.stride = 0;
       const swing = s.moving ? Math.sin(s.stride) * 0.7 : 0;

@@ -10,7 +10,7 @@ import { createSky } from './sky.js';
 import { createIslands, ISLANDS, nightLights, terrainHeight, coastRadius } from './islands.js';
 import { createShore } from './shore.js';
 import { createWildlife } from './wildlife.js';
-import { createPeople } from './people.js';
+import { createPeople, buildPerson } from './people.js';
 import { createFinds } from './finds.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
@@ -62,6 +62,9 @@ const windFx = createWindFx();
 const shore = createShore();
 const wildlife = createWildlife(waves, { foam: foamAt, splash: (distance) => audio.splash(distance) });
 scene.add(sky.dome, sky.stars, sky.clouds, islands, ocean.mesh, ship.root, windFx.ribbons, windFx.rain, shore.sailor, shore.dinghy, wildlife.group);
+const captain = buildPerson({ shirt: 0xf3efe2, trousers: 0x2c3f63, skin: 0xd9a47a, hat: 'straw', sash: 0xd9453c, scale: 1.1 });
+ship.root.add(captain.group);
+applyPaint(captain.group);
 const people = createPeople();
 const finds = createFinds();
 scene.add(people.group, finds.group);
@@ -240,6 +243,7 @@ function goAshore(isl, useDock) {
   setPadLabels('Walk');
   cam.sailDist = cam.dist;
   cam.dist = 11;
+  cam.follow = shore.state.heading;
   cam.yaw = 0;
   cam.pitch = 0.3;
   if (useDock && !save.visited.includes(isl.name)) { save.visited.push(isl.name); persist(); }
@@ -249,7 +253,7 @@ function backToShip() {
   places.close();
   shore.leave();
   document.body.classList.remove('ashore');
-  setPadLabels('Sails');
+  setPadLabels('Steer · Sails');
   cam.dist = cam.sailDist || ship.type.cam.dist;
   cam.yaw = 0.5;
   cam.pitch = 0.24;
@@ -257,8 +261,8 @@ function backToShip() {
 }
 
 // The one thing you can do right now, shown on the big button (and the E key).
-const walkLabels = document.querySelectorAll('#pad-right .stack small');
-const setPadLabels = (text) => walkLabels.forEach((e) => (e.textContent = text));
+const stickHint = document.getElementById('stick-hint');
+const setPadLabels = (text) => (stickHint.textContent = text);
 const KEEPER_ACTIONS = { tavern: 'Have a drink with ', market: 'Trade with ', shipwright: 'Talk ships with ' };
 const actionBtn = document.getElementById('action');
 let action = null, portNearby = null, beachNearby = null;
@@ -352,13 +356,35 @@ window.addEventListener('keydown', (e) => {
   }
 });
 window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
-window.addEventListener('blur', () => { for (const k in held) held[k] = false; });
-document.querySelectorAll('[data-hold]').forEach((b) => {
-  const set = (on) => (e) => { e.preventDefault(); held[b.dataset.hold] = on; b.classList.toggle('held', on); };
-  b.addEventListener('pointerdown', (e) => { b.setPointerCapture(e.pointerId); set(true)(e); });
-  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, set(false));
-  b.addEventListener('contextmenu', (e) => e.preventDefault());
-});
+window.addEventListener('blur', () => { for (const k in held) held[k] = false; dropStick(); });
+// The joystick. Its position is a push from -1 to 1 each way; the keys count as a full push.
+const stick = { x: 0, y: 0 };
+const stickEl = document.getElementById('stick'), knob = document.getElementById('stick-knob');
+function moveStick(e) {
+  const r = stickEl.getBoundingClientRect(), reach = r.width * 0.36;
+  let dx = (e.clientX - (r.left + r.width / 2)) / reach, dy = (e.clientY - (r.top + r.height / 2)) / reach;
+  const len = Math.hypot(dx, dy);
+  if (len > 1) { dx /= len; dy /= len; }
+  knob.style.transform = `translate(${dx * reach}px, ${dy * reach}px)`;
+  const dead = (v) => (Math.abs(v) < 0.16 ? 0 : (v - Math.sign(v) * 0.16) / 0.84); // a small dead spot in the middle
+  stick.x = dead(dx);
+  stick.y = dead(-dy);
+}
+function dropStick() {
+  stick.x = stick.y = 0;
+  knob.style.transform = '';
+}
+stickEl.addEventListener('pointerdown', (e) => { e.preventDefault(); stickEl.setPointerCapture(e.pointerId); moveStick(e); });
+stickEl.addEventListener('pointermove', (e) => { if (stickEl.hasPointerCapture(e.pointerId)) moveStick(e); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) stickEl.addEventListener(ev, dropStick);
+stickEl.addEventListener('contextmenu', (e) => e.preventDefault());
+// Stick and keys together: x is right (+) or left (-), y is up (+) or down (-).
+const push = { x: 0, y: 0 };
+function readPush() {
+  push.x = THREE.MathUtils.clamp(stick.x + (held.right ? 1 : 0) - (held.left ? 1 : 0), -1, 1);
+  push.y = THREE.MathUtils.clamp(stick.y + (held.up ? 1 : 0) - (held.down ? 1 : 0), -1, 1);
+}
+const walkMove = { x: 0, z: 0 };
 anchorBtn.addEventListener('click', toggleAnchor);
 anchorBtn.setAttribute('aria-pressed', String(ship.state.anchorDown));
 
@@ -427,11 +453,15 @@ function updateCamera(dt, time, snap) {
   }
   camera.up.copy(worldUp);
   if (camera.near !== 1) { camera.near = 1; camera.updateProjectionMatrix(); }
-  // Ease the camera round to stay behind the ship (or the sailor) as they turn.
-  const heading = w.active ? w.heading : s.heading;
-  let diff = heading - cam.follow;
-  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  cam.follow += diff * (snap ? 1 : Math.min(1, dt * (w.active ? 2.5 : 1.2)));
+  if (w.active) {
+    // Ashore the view swings round as you push left or right, so one stick both walks and turns.
+    if (!places.isOpen) cam.follow -= push.x * 1.5 * dt;
+  } else {
+    // At sea, ease the camera round to stay behind the ship as she turns.
+    let diff = s.heading - cam.follow;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    cam.follow += diff * (snap ? 1 : Math.min(1, dt * 1.2));
+  }
   if (w.active) vPos.set(w.x, w.y + 1.9, w.z);
   else vPos.set(s.x, ship.type.cam.height + s.y * 0.4, s.z);
   cam.target.lerp(vPos, snap ? 1 : Math.min(1, dt * 6));
@@ -519,9 +549,21 @@ function frame() {
   updateWind(time);
   const ashore = shore.state.active;
   // On foot the same keys walk the sailor, and the ship rides quietly at anchor.
-  const input = ashore ? { steer: 0, sail: 0 } : { steer: (held.right ? 1 : 0) - (held.left ? 1 : 0), sail: (held.up ? 1 : 0) - (held.down ? 1 : 0) };
+  readPush();
+  const input = ashore ? { steer: 0, sail: 0 } : { steer: push.x, sail: push.y };
   ship.update(dt, time, input, wind);
-  if (ashore && shore.update(dt, held, places.isOpen)) audio.footstep(shore.state.onWood);
+  if (ashore) {
+    // Turn the push into a direction on the ground, measured from where the camera is looking.
+    const look = cam.follow + cam.yaw, fx = Math.sin(look), fz = Math.cos(look);
+    walkMove.x = fx * push.y - fz * push.x;
+    walkMove.z = fz * push.y + fx * push.x;
+    if (shore.update(dt, walkMove, places.isOpen)) audio.footstep(shore.state.onWood);
+  }
+  // Your captain stands at the wheel, except when ashore or when you are looking through their eyes.
+  captain.group.visible = !ashore && !cam.deck;
+  captain.group.position.set(0, ship.helm.y - 1.82, ship.helm.z + 0.55);
+  captain.arms[0].rotation.x = -1.2 - ship.state.rudder * 0.35;
+  captain.arms[1].rotation.x = -1.2 + ship.state.rudder * 0.35;
   if (ashore) {
     const n = finds.collect(shore.state);
     if (n) { audio.coin(); showToast(`A shell for your collection: ${n} of ${finds.shellTotal}`); }
@@ -555,7 +597,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, camera,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, camera, stick, captain,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.

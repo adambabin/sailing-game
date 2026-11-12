@@ -275,8 +275,8 @@ function buildSloop(m, C) {
   const MAST_Z = 1.5, MAST_TOP = 15.2;
   m.add(spar(V(0, 0.9, MAST_Z), V(0, MAST_TOP, MAST_Z), 0.19, C.wood));
   m.add(spar(V(0, 1.75, 5.6), V(0, 2.6, 10.8), 0.13, C.wood));
-  box(m, 2.1, 1.0, 2.9, C.cabin, 0, 1.55, -2.3);
-  box(m, 2.4, 0.16, 3.2, C.wood, 0, 2.12, -2.3);
+  box(m, 2.1, 1.0, 2.2, C.cabin, 0, 1.55, -1.9); // the cabin stops short of the wheel
+  box(m, 2.4, 0.16, 2.5, C.wood, 0, 2.12, -1.9);
   for (const [x, z] of [[0.9, 3.4], [-0.75, 4.1]]) {
     const barrel = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.75, 8)), C.wood);
     barrel.position.set(x, 1.45, z);

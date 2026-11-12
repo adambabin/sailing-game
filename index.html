@@ -81,13 +81,14 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 #hint.warn { color: var(--coral); }
 
 .pad { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: flex-end; }
-#pad-left { left: var(--gap-l); }
+#stick { position: fixed; left: var(--gap-l); bottom: calc(30px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; touch-action: none; cursor: grab; }
+#stick-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: var(--paper); opacity: 0.88; pointer-events: none; }
+#stick-hint { position: fixed; left: var(--gap-l); width: 128px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper); opacity: 0.75; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 #pad-right { right: var(--gap-r); }
 .pad button { width: 60px; height: 60px; border-radius: 50%; font-size: 22px; display: grid; place-items: center; }
 .pad button small { display: block; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: -4px; }
 .pad button.held, .pad button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
 .pad button.held small, .pad button[aria-pressed="true"] small { color: var(--ink); }
-.stack { display: flex; flex-direction: column; gap: 10px; }
 
 #help { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px var(--gap-r) 16px var(--gap-l); background: rgba(8, 24, 36, 0.45); z-index: 5; }
 #help .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; max-width: 430px; width: 100%; box-sizing: border-box; max-height: 100%; overflow: auto; }
@@ -106,7 +107,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   #tools { gap: 2px; }
   #tools button { padding: 6px 5px; font-size: 11px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
-  #action { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
+  #action { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
   .sheet { max-height: calc(100% - 40px); }
   #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
 }
@@ -167,16 +168,12 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 <div id="toast" class="panel"></div>
 <div id="hint" class="panel"></div>
 
-<div id="pad-left" class="pad">
-  <button id="btn-port" class="panel" data-hold="left" aria-label="Steer to port (left)">&#9664;</button>
-  <button id="btn-stbd" class="panel" data-hold="right" aria-label="Steer to starboard (right)">&#9654;</button>
+<div id="stick" class="panel" role="group" aria-label="Joystick. On the ship: left and right steer, up and down set the sails. Ashore: walk in any direction.">
+  <div id="stick-knob"></div>
 </div>
+<div id="stick-hint">Steer &middot; Sails</div>
 <div id="pad-right" class="pad">
   <button id="btn-anchor" class="panel" aria-pressed="false" aria-label="Drop or weigh anchor"><span>&#9875;<small>Anchor</small></span></button>
-  <div class="stack">
-    <button id="btn-raise" class="panel" data-hold="up" aria-label="Raise sails"><span>&#9650;<small>Sails</small></span></button>
-    <button id="btn-lower" class="panel" data-hold="down" aria-label="Lower sails"><span>&#9660;<small>Sails</small></span></button>
-  </div>
 </div>
 
 <div id="help">
@@ -184,8 +181,8 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
     <h1>Tradewind</h1>
     <p>A quiet sail among the islands. The wind does the work; you choose how much sail to carry and where to point her.</p>
     <dl>
-      <dt>A / D or &#9664; &#9654;</dt><dd>Steer to port and starboard</dd>
-      <dt>W / S or &#9650; &#9660;</dt><dd>Raise and lower the sails</dd>
+      <dt>Stick, or A / D</dt><dd>Steer to port and starboard</dd>
+      <dt>Stick, or W / S</dt><dd>Raise and lower the sails</dd>
       <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
       <dt>Drag, scroll</dt><dd>Look around and zoom</dd>
       <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
@@ -195,7 +192,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <dt>M</dt><dd>Sound, no music, or muted</dd>
     </dl>
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
-    <p>Drop anchor by a port's dock to go ashore. On foot, the same keys walk and turn.</p>
+    <p>Drop anchor by a port's dock to go ashore. On foot, the stick or the same keys walk you in any direction and the view follows.</p>
     <button id="help-go" class="go">Set sail</button>
   </div>
 </div>
