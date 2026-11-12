@@ -10,6 +10,9 @@ export const save = {
   discovered: ['Port Marigold'], // islands seen up close
   rumoured: [], // islands heard about in a tavern
   visited: [], // ports where you have gone ashore
+  maps: [], // treasure maps held: { id, island, x, z, tier, coins }
+  treasures: 0, // chests dug up
+  bottleDay: 0, // the last day a washed-up bottle was collected
   finds: [], // curiosities found, by island name
   shells: [], // shells picked up
   owned: [], // paints and sail cloth bought, as "part:value"

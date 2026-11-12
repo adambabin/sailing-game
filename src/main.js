@@ -12,6 +12,7 @@ import { createShore } from './shore.js';
 import { createWildlife } from './wildlife.js';
 import { createPeople, buildPerson } from './people.js';
 import { createFinds } from './finds.js';
+import { createTreasure } from './treasure.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -67,7 +68,8 @@ ship.root.add(captain.group);
 applyPaint(captain.group);
 const people = createPeople();
 const finds = createFinds();
-scene.add(people.group, finds.group);
+const treasure = createTreasure();
+scene.add(people.group, finds.group, treasure.group);
 applyPaint(scene);
 
 // Foam wake: small white patches that lie on the water, spread out and fade.
@@ -228,10 +230,38 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip });
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure });
 const chart = createChart();
 const chartBtn = document.getElementById('tool-chart');
+// Treasure maps are kept with the chart. Each opens as a card you can study.
+const mapList = document.getElementById('chart-maps');
+function listMaps() {
+  mapList.replaceChildren(...save.maps.map((m, i) => {
+    const b = Object.assign(document.createElement('button'), { className: 'close', id: 'map-' + i, textContent: treasure.tierName(m) });
+    b.addEventListener('click', () => { if (chart.isOpen) toggleChart(); openMap(m); });
+    return b;
+  }));
+}
+function openMap(m) {
+  const canvas = Object.assign(document.createElement('canvas'), { className: 'treasure-map' });
+  canvas.setAttribute('aria-label', 'A hand-drawn map of an unnamed island with an X marked on it');
+  const here = shore.state.active && shore.state.island.name === m.island;
+  treasure.draw(canvas, m, here ? shore.state : null);
+  const note = Object.assign(document.createElement('p'), { className: 'muted', textContent: here ? 'You know this shore. The dark dot is where you stand; dig at the X.' : 'No name, only a shape. Find the island that matches, go ashore, and dig at the X.' });
+  places.card(treasure.tierName(m), canvas, note);
+}
+// Dig where you stand.
+function dig() {
+  const result = treasure.dig(shore.state);
+  audio.dig();
+  if (result.found) {
+    audio.coin();
+    setTimeout(() => audio.coin(), 180);
+    places.show('Buried treasure', ['Your spade strikes wood.', `An iron-bound chest, and inside it ${result.found.coins} coins. Your purse now holds ${save.coins}.`]);
+  } else showToast(result.warm ? 'Nothing here, but the map says you are close.' : 'Nothing but sand.');
+}
 function toggleChart() {
+  listMaps();
   chartBtn.setAttribute('aria-expanded', String(chart.toggle(ship.state, wind)));
 }
 chartBtn.addEventListener('click', toggleChart);
@@ -286,7 +316,8 @@ function findAction() {
     if (someone) return { label: someone.kind === 'fisher' ? 'Ask about the fishing' : 'Say hello', run: () => showToast('“' + people.greet(someone, env) + '”') };
     const f = finds.on(w.island);
     if (Math.hypot(w.x - f.x, w.z - f.z) < 4.2) return { label: f.kind.verb, run: () => lookAt(f) };
-    return shore.atDinghy() ? { label: 'Row back to the ship', run: backToShip } : null;
+    if (shore.atDinghy()) return { label: 'Row back to the ship', run: backToShip };
+    return save.maps.length ? { label: 'Dig here', run: dig } : null;
   }
   portNearby = ISLANDS.find((isl) => isl.portInfo && Math.hypot(s.x - isl.dock.x, s.z - isl.dock.z) < 110) || null;
   // Any island's beach will do if there is no dock nearby.
@@ -565,6 +596,9 @@ function frame() {
   captain.arms[0].rotation.x = -1.2 - ship.state.rudder * 0.35;
   captain.arms[1].rotation.x = -1.2 + ship.state.rudder * 0.35;
   if (ashore) {
+    const got = treasure.collectBottle(shore.state);
+    if (got === 'full') { if (toastTimer <= 0) showToast('A bottle with a map inside, but you are carrying three already.'); }
+    else if (got) { audio.coin(); showToast('A bottle on the sand, and in it ' + treasure.tierName(got).toLowerCase() + '. It is with your chart.'); }
     const n = finds.collect(shore.state);
     if (n) { audio.coin(); showToast(`A shell for your collection: ${n} of ${finds.shellTotal}`); }
   }
@@ -579,6 +613,7 @@ function frame() {
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
+  treasure.update();
   people.update(dt, time, env, ashore ? shore.state : ship.state, ashore ? shore.state : null);
   updateWake(dt, time);
   applyEnvironment(dt);
@@ -597,7 +632,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, camera, stick, captain,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.

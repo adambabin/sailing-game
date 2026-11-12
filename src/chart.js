@@ -102,6 +102,7 @@ export function createChart() {
       ['Ports visited', `${save.visited.length} of ${ports}`],
       ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
       ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
+      ['Treasure', `${save.treasures} dug up, ${save.maps.length} ${save.maps.length === 1 ? 'map' : 'maps'} in hand`],
       ['Purse', save.coins + ' coins'],
       ['Hold', `${cargoCount()} of ${save.hold} crates` + (cargo ? ` (${cargo})` : '')],
     ];

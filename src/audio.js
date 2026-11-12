@@ -187,6 +187,12 @@ export function createAudio() {
       const now = ctx.currentTime;
       for (const [f, v, len] of [[392, 0.12, 4], [784, 0.06, 3], [1046, 0.04, 2.2], [1318, 0.025, 1.6]]) tone('sine', f, v, 0.005, len, fx, now);
     },
+    // A spade going into sand.
+    dig() {
+      if (!ctx) return;
+      burst('lowpass', 500, 0.3, 0.16);
+      burst('highpass', 2200, 0.05, 0.22, ctx.currentTime + 0.05);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;

@@ -4,6 +4,7 @@ import { save, persist, cargoCount } from './save.js';
 import { GOODS, TAVERNS, buyPrice, sellPrice, bestRoute } from './trade.js';
 import { ISLANDS } from './islands.js';
 import { SHIP_TYPES } from './ship.js';
+import { MAP_PRICE, MAX_MAPS } from './treasure.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -73,6 +74,9 @@ export function createPlaces(game) {
       lines.push({ text: `${other.name} lies to the ${bearing(isl, other)} of here. There is ${what}.`, island: other.name });
     }
     lines.push(...LORE);
+    const washed = game.treasure.bottleIsland();
+    if (washed) lines.push(`A fisherman swears he saw a bottle wash up on ${washed.name} this morning. Could be a letter. Could be a map.`);
+    lines.push('A treasure map never names its island. Learn the shapes on your chart, and you will know it when you see it.');
     const pick = lines[(lineIndex * 7) % lines.length];
     lineIndex++;
     const text = typeof pick === 'string' ? pick : pick.text;
@@ -80,10 +84,25 @@ export function createPlaces(game) {
       save.rumoured.push(pick.island);
       persist();
     }
+    // Now and then somebody in the corner has a map to sell.
+    const T = game.treasure, full = !T.canHoldMore();
+    const buyMap = h('button', {
+      id: 'tavern-map', className: 'close', disabled: full || save.coins < MAP_PRICE,
+      onclick: () => {
+        const m = T.gainMap();
+        if (!m) return;
+        save.coins -= MAP_PRICE;
+        persist();
+        game.audio.coin();
+        game.toast(T.tierName(m) + ' is yours. Find it in your chart.');
+        tavern(isl);
+      },
+    }, full ? `You are carrying ${MAX_MAPS} maps already` : `Buy a treasure map · ${MAP_PRICE} coins`);
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'tavern')} leans over and says:`),
       h('p', { className: 'quote' }, '“' + text + '”'),
-      h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another')
+      h('div', { className: 'trade-buttons' }, h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another'), buyMap),
+      h('p', { className: 'muted', style: 'margin-top:12px' }, `A sailor in the corner sells old maps, no questions asked. You have ${save.coins} coins.`)
     );
   }
 
@@ -215,6 +234,13 @@ export function createPlaces(game) {
       open = { kind: 'card' };
       title.textContent = heading;
       body.replaceChildren(...paragraphs.map((t, i) => h('p', { className: i ? '' : 'quote' }, t)));
+      panel.hidden = false;
+    },
+    // A card holding any content (used for treasure maps).
+    card(heading, ...nodes) {
+      open = { kind: 'card' };
+      title.textContent = heading;
+      body.replaceChildren(...nodes);
       panel.hidden = false;
     },
     close() {
