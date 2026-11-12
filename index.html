@@ -36,7 +36,7 @@ body { background: var(--ink); color: var(--paper); font-family: var(--body); fo
 .gauge b span { font-size: 11px; font-weight: 700; color: var(--muted); margin-left: 2px; }
 
 #topright { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); right: var(--gap-r); display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-#tools { display: flex; padding: 4px; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+#tools { display: flex; padding: 4px; gap: 4px;  flex-wrap: wrap; justify-content: flex-end;}
 button { font: inherit; color: var(--paper); background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 #tools button { padding: 7px 11px; border-radius: 7px; font-weight: 700; font-size: 13px; }
@@ -102,7 +102,8 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .gauge { min-width: 34px; }
   .gauge small { font-size: 9px; letter-spacing: 0.06em; }
   .gauge b { font-size: 15px; }
-  #tools { gap: 2px; max-width: calc(100vw - 96px); }
+  #tools { max-width: calc(100vw - 96px); }
+  #tools { gap: 2px; }
   #tools button { padding: 6px 5px; font-size: 11px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
   #action { bottom: calc(160px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
@@ -126,6 +127,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   <div style="display:flex;gap:8px;align-items:center">
     <div id="tools" class="panel" role="group" aria-label="Game tools">
       <button id="tool-chart" aria-expanded="false">Chart</button>
+      <button id="tool-view" aria-expanded="false">View</button>
       <button id="tool-ship">Ship</button>
       <button id="tool-time">Time</button>
       <button id="tool-weather">Weather</button>
@@ -189,6 +191,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
       <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
       <dt>E</dt><dd>Go ashore, visit a place, row back</dd>
       <dt>C</dt><dd>Chart and logbook</dd>
+      <dt>V</dt><dd>Stand at the wheel, or look from astern</dd>
       <dt>M</dt><dd>Sound, no music, or muted</dd>
     </dl>
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>

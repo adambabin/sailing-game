@@ -293,6 +293,7 @@ function buildSloop(m, C) {
       jibSail(m, C, { tack: V(0, 2.7, 10.5), head: V(0, 13.6, 1.8), clewZ: 2.8, spread: 1.5 }),
     ],
     flag: V(0, MAST_TOP - 0.2, MAST_Z), anchor: V(-1.25, 1.35, 5.2), lantern: V(0, 2.55, -5.7), rudder: V(0, -0.1, -6), rudderSize: 1,
+    helm: V(0, 3.05, -4.75), // where your eyes are when you stand at the wheel
   };
 }
 
@@ -344,26 +345,27 @@ function buildSquareRigger(m, C, o) {
     sails,
     flag: V(0, tallest.y - 0.2, tallest.z), anchor: V(-hull.halfAt(bowZ - 5) * 0.95, hull.deckAt(bowZ - 5) + 0.3, bowZ - 5),
     lantern: V(0, hull.deckAt(sternZ + 0.6) + 1.75, sternZ + 0.5), rudder: V(0, -0.2, sternZ), rudderSize: o.rudder,
+    helm: V(0, hull.deckAt(o.helmZ) + o.helmUp + 1.75, o.helmZ),
   };
 }
 
 const BRIG = {
   hull: { z0: -10, len: 21, beam: 6.4, sternW: 0.74, deck: 2.1, sheer: 0.8, bowF: 1.4, sternF: 1.5, draft: 1.7, bowRise: 2.6, sternRise: 0.6 },
   decks: [{ z0: -9.6, z1: -5, h: 1.5, rail: 'fore', windows: 3 }],
-  hatchZ: 0.5, sprit: 6.5, jibs: 2, rudder: 1.5,
+  hatchZ: 0.5, sprit: 6.5, jibs: 2, rudder: 1.5, helmZ: -7.6, helmUp: 1.5, // the wheel stands on the raised deck aft. The lowest sails are cut high enough to see under from there.
   masts: [
-    { z: 4.6, h: 24, sails: [{ y: 9.5, w: 10.5, h: 7 }, { y: 16.3, w: 8.5, h: 6.2 }, { y: 21.8, w: 6.5, h: 4.8 }] },
-    { z: -3.2, h: 27, sails: [{ y: 11.5, w: 11.5, h: 7.5 }, { y: 18.8, w: 9.3, h: 6.6 }, { y: 24.6, w: 7, h: 5.2 }], spanker: { up: 4.4, boom: 7.2, hoist: 6.2, peakRise: 3, peakBack: 5.2 } },
+    { z: 4.6, h: 24, sails: [{ y: 9.5, w: 10.5, h: 5.4 }, { y: 16.3, w: 8.5, h: 6.2 }, { y: 21.8, w: 6.5, h: 4.8 }] },
+    { z: -3.2, h: 27, sails: [{ y: 11.5, w: 11.5, h: 6 }, { y: 18.8, w: 9.3, h: 6.6 }, { y: 24.6, w: 7, h: 5.2 }], spanker: { up: 4.4, boom: 7.2, hoist: 6.2, peakRise: 3, peakBack: 5.2 } },
   ],
 };
 
 const GALLEON = {
   hull: { z0: -14, len: 29, beam: 8.6, sternW: 0.8, deck: 3.0, sheer: 1.2, bowF: 1.3, sternF: 2.4, draft: 2.3, bowRise: 3.4, sternRise: 0.9 },
   decks: [{ z0: -13.5, z1: -7.5, h: 2.4, rail: 'fore', windows: 4 }, { z0: -13.5, z1: -10.5, h: 4.3, rail: 'fore', windows: 3 }, { z0: 6.5, z1: 11.5, h: 1.6, rail: 'aft' }],
-  hatchZ: 2.2, sprit: 9, jibs: 2, rudder: 2.1,
+  hatchZ: 2.2, sprit: 9, jibs: 2, rudder: 2.1, helmZ: -9.2, helmUp: 2.4,
   masts: [
-    { z: 8.8, h: 29, sails: [{ y: 13, w: 13.5, h: 9 }, { y: 21.5, w: 10.8, h: 7.6 }, { y: 27, w: 8, h: 5 }] },
-    { z: -0.6, h: 34, sails: [{ y: 13.5, w: 15, h: 10 }, { y: 23, w: 12, h: 8.6 }, { y: 31, w: 9, h: 7 }] },
+    { z: 8.8, h: 29, sails: [{ y: 13, w: 13.5, h: 7.2 }, { y: 21.5, w: 10.8, h: 7.6 }, { y: 27, w: 8, h: 5 }] },
+    { z: -0.6, h: 34, sails: [{ y: 13.5, w: 15, h: 7.6 }, { y: 23, w: 12, h: 8.6 }, { y: 31, w: 9, h: 7 }] },
     { z: -9.6, h: 22, sails: [{ y: 19.6, w: 7.5, h: 6 }], spanker: { up: 6.4, boom: 6.5, hoist: 6.4, peakRise: 3.2, peakBack: 5 } },
   ],
 };
@@ -413,7 +415,20 @@ export function createShip(waves) {
   anchor.add(arms);
   const ANCHOR_HOME = V(-1.25, 1.35, 5.2);
   const cable = spar(V(0, 0, 0), V(0, 1, 0), 0.045, 0x3a2f28);
-  root.add(lantern, lanternLight, rudder, flag, anchor, cable);
+  // The ship's wheel, on a post just ahead of where the helmsman stands.
+  const wheelPost = new THREE.Group();
+  box(wheelPost, 0.16, 1.0, 0.16, C.wood, 0, -0.5, 0);
+  const wheel = new THREE.Group();
+  wheel.add(paint(new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 6, 16)), C.wood));
+  for (let i = 0; i < 4; i++) {
+    const spoke = paint(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.12, 5)), C.wood);
+    spoke.rotation.z = (i * Math.PI) / 4;
+    wheel.add(spoke);
+  }
+  wheel.position.set(0, 0.05, -0.14);
+  wheelPost.add(wheel);
+  const helm = V(0, 3, -4);
+  root.add(lantern, lanternLight, rudder, flag, anchor, cable, wheelPost);
 
   let type = SHIP_TYPES.sloop, typeId = 'sloop', model = null, rig = null, lastLook = null;
 
@@ -434,6 +449,8 @@ export function createShip(waves) {
     rudder.scale.setScalar(rig.rudderSize);
     flag.position.copy(rig.flag);
     ANCHOR_HOME.copy(rig.anchor);
+    helm.copy(rig.helm);
+    wheelPost.position.set(0, rig.helm.y - 0.85, rig.helm.z + 1.45);
     state.halfBeam = type.size.half;
     state.bow = type.size.bow;
     state.stern = type.size.stern;
@@ -527,6 +544,7 @@ export function createShip(waves) {
     root.position.set(s.x, s.y + 0.3, s.z);
     root.rotation.set(s.pitch, s.heading, s.roll);
     rudder.rotation.y = -s.rudder * 0.6;
+    wheel.rotation.z = -s.rudder * 2.2;
 
     // --- Sails: let out further the more the wind is behind
     ctx.r = s.sail;
@@ -576,6 +594,7 @@ export function createShip(waves) {
     setLook,
     setType,
     lanternLight,
+    helm,
     get type() { return type; },
     get typeId() { return typeId; },
     get knots() {

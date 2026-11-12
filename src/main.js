@@ -194,6 +194,17 @@ function tryNextShip() {
   showToast('Trying the ' + ship.type.name.toLowerCase());
 }
 document.getElementById('tool-ship').addEventListener('click', tryNextShip);
+
+// Swap between the view from astern and the view from the wheel.
+const viewBtn = document.getElementById('tool-view');
+function toggleView() {
+  cam.deck = !cam.deck;
+  cam.lookYaw = 0;
+  cam.lookPitch = 0;
+  viewBtn.setAttribute('aria-expanded', String(cam.deck));
+  showToast(cam.deck ? 'At the wheel' : 'View from astern');
+}
+viewBtn.addEventListener('click', toggleView);
 document.getElementById('tool-time').addEventListener('click', skipTime);
 document.getElementById('tool-weather').addEventListener('click', cycleWeather);
 
@@ -330,6 +341,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyR') cycleWeather();
   else if (e.code === 'KeyM') cycleSound();
   else if (e.code === 'KeyC') toggleChart();
+  else if (e.code === 'KeyV') toggleView();
   else if (e.code === 'KeyB') tryNextShip();
   else if (e.code === 'KeyE' && !e.repeat) doAction();
   else if (e.code === 'Enter' || e.code === 'Escape') {
@@ -370,7 +382,7 @@ resetBtn.addEventListener('click', () => {
 document.getElementById('helpbtn').addEventListener('click', () => { help.hidden = !help.hidden; });
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom
-const cam = { yaw: 0.5, pitch: 0.24, dist: ship.type.cam.dist, follow: Math.PI, target: new THREE.Vector3(), lastDrag: -10 };
+const cam = { yaw: 0.5, pitch: 0.24, dist: ship.type.cam.dist, follow: Math.PI, target: new THREE.Vector3(), lastDrag: -10, deck: false, lookYaw: 0, lookPitch: 0 };
 const clampZoom = (d) => (shore.state.active ? THREE.MathUtils.clamp(d, 4, 45) : THREE.MathUtils.clamp(d, ship.type.cam.min, 160));
 const pointers = new Map();
 let pinch = 0;
@@ -378,7 +390,10 @@ canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.point
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
   if (!p) return;
-  if (pointers.size === 1) {
+  if (pointers.size === 1 && cam.deck && !shore.state.active) { // at the wheel, dragging turns your head
+    cam.lookYaw = THREE.MathUtils.clamp(cam.lookYaw + (e.clientX - p.x) * 0.005, -2.6, 2.6);
+    cam.lookPitch = THREE.MathUtils.clamp(cam.lookPitch + (e.clientY - p.y) * 0.004, -0.7, 0.9);
+  } else if (pointers.size === 1) {
     cam.yaw -= (e.clientX - p.x) * 0.006;
     cam.pitch = THREE.MathUtils.clamp(cam.pitch + (e.clientY - p.y) * 0.004, 0.04, 1.3);
   }
@@ -393,8 +408,25 @@ canvas.addEventListener('pointermove', (e) => {
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => { pointers.delete(e.pointerId); pinch = 0; });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = clampZoom(cam.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
 
+const eye = new THREE.Vector3(), shipUp = new THREE.Vector3(), worldUp = new THREE.Vector3(0, 1, 0);
 function updateCamera(dt, time, snap) {
   const s = ship.state, w = shore.state;
+  if (cam.deck && !w.active) {
+    // Standing at the wheel: the camera rides with the ship, softened a little so the horizon does not lurch.
+    ship.root.updateMatrixWorld();
+    eye.copy(ship.helm).applyMatrix4(ship.root.matrixWorld);
+    shipUp.set(0, 1, 0).transformDirection(ship.root.matrixWorld);
+    camera.up.copy(worldUp).lerp(shipUp, 0.55).normalize();
+    const yaw = s.heading - cam.lookYaw, cp = Math.cos(cam.lookPitch);
+    camera.position.copy(eye);
+    camera.lookAt(eye.x + Math.sin(yaw) * cp, eye.y - Math.sin(cam.lookPitch), eye.z + Math.cos(yaw) * cp);
+    cam.follow = s.heading;
+    cam.target.set(s.x, ship.type.cam.height, s.z);
+    if (camera.near !== 0.35) { camera.near = 0.35; camera.updateProjectionMatrix(); }
+    return;
+  }
+  camera.up.copy(worldUp);
+  if (camera.near !== 1) { camera.near = 1; camera.updateProjectionMatrix(); }
   // Ease the camera round to stay behind the ship (or the sailor) as they turn.
   const heading = w.active ? w.heading : s.heading;
   let diff = heading - cam.follow;
