@@ -15,7 +15,7 @@ import { createFinds } from './finds.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
-import { createShip, SHIP_COLORS } from './ship.js';
+import { createShip, SHIP_COLORS, SHIP_TYPES } from './ship.js';
 import { createAudio, MODE_LABELS } from './audio.js';
 
 const canvas = document.getElementById('sea');
@@ -183,6 +183,17 @@ function cycleWeather() {
   if (env.forced < 0) env.hold = 0;
   showToast(env.forced < 0 ? 'Weather: changing on its own' : 'Weather: ' + WEATHERS[env.forced].name);
 }
+// Temporary, for trying things out: step through the three ships without buying them.
+// It does not change what you own; reloading the page puts you back in your own ship.
+function tryNextShip() {
+  const ids = Object.keys(SHIP_TYPES);
+  ship.setType(ids[(ids.indexOf(ship.typeId) + 1) % ids.length]);
+  applyUpgrades();
+  cam.sailDist = ship.type.cam.dist;
+  if (!shore.state.active) cam.dist = ship.type.cam.dist;
+  showToast('Trying the ' + ship.type.name.toLowerCase());
+}
+document.getElementById('tool-ship').addEventListener('click', tryNextShip);
 document.getElementById('tool-time').addEventListener('click', skipTime);
 document.getElementById('tool-weather').addEventListener('click', cycleWeather);
 
@@ -319,6 +330,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyR') cycleWeather();
   else if (e.code === 'KeyM') cycleSound();
   else if (e.code === 'KeyC') toggleChart();
+  else if (e.code === 'KeyB') tryNextShip();
   else if (e.code === 'KeyE' && !e.repeat) doAction();
   else if (e.code === 'Enter' || e.code === 'Escape') {
     if (!help.hidden) closeHelp();

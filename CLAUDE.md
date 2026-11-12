@@ -57,7 +57,7 @@ Things that span several files:
 - **Wildlife** (`src/wildlife.js`) is decoration only and never affects the ship: gulls orbit the nearest island and come out to a ship within about 280 m; a dolphin pod joins occasionally in open water when moving (force one in tests with `game.wildlife.pod.wait = 0`); flying fish; three merchant ships that wander between random open-water points, steering away from land and from the player. It disturbs the water through `foamAt` and `audio.splash`, passed in from `main.js`. To test without waiting on frames, call `game.wildlife.update(dt, time, game.ship.state, game.env, game.camera)` in a loop.
 - **Audio** (`src/audio.js`) is fully synthesised with Web Audio and can only start after a user gesture; `main.js` calls `audio.start()` on the first pointer/key event. One-shot sounds are triggered from `main.js` (e.g. `audio.anchor`), continuous layers follow the state passed to `audio.update`.
 
-The HUD and all CSS live in `index.html`; elements toggle with the `hidden` attribute (there is an explicit `[hidden] { display: none !important }` rule because several are `display: grid/flex`). Touch buttons and keyboard share the same `held` input state, so new controls should be added to both. Keys: A/D/W/S or arrows (steer and sails, or turn and walk ashore), Space anchor, E context action, C chart, T skip three hours, R cycle weather, M sound mode. The help overlay in `index.html` and the README controls table list these and need updating when controls change.
+The HUD and all CSS live in `index.html`; elements toggle with the `hidden` attribute (there is an explicit `[hidden] { display: none !important }` rule because several are `display: grid/flex`). Touch buttons and keyboard share the same `held` input state, so new controls should be added to both. Keys: A/D/W/S or arrows (steer and sails, or turn and walk ashore), Space anchor, E context action, C chart, T skip three hours, R cycle weather, B try the next ship (temporary), M sound mode. The help overlay in `index.html` and the README controls table list these and need updating when controls change.
 
 ## Direction
 
@@ -69,9 +69,9 @@ Agreed plan, in this order (set by the owner):
 2. Life at sea (gulls, dolphins, flying fish, other ships). Done and approved.
 3. People in the villages. Done and approved.
 4. More to find on the islands. Done and approved.
-5. More ships: a two-masted brig and a galleon, bought at shipwrights. Built; awaiting the owner's review.
+5. More ships: a two-masted brig and a galleon, bought at shipwrights. Done and approved. A **temporary "Ship" button** (and the B key) steps through the three ships without buying them, so the owner can try them; it does not change `save.ships` or `save.shipType`, and reloading returns to the owned ship. Remove it (`tryNextShip` in `main.js`, `#tool-ship` in `index.html`) when the owner says testing is done.
 6. A first-person view from the deck, at the helm.
 
 Preferences the owner has stated: the sailing feel is right as it is; the game should stay relaxing, with no danger or pressure (a gale is a wilder ride, not a threat); features are reviewed on the private link before going public.
 
-Known limits worth remembering: all testing so far has been automated, so motion smoothness, real-phone performance and how the generated audio actually sounds have only been judged by the owner; villagers walk in straight lines between spots and do not avoid buildings or each other; the Time and Weather buttons are preview tools kept on purpose for now (see the plan).
+Known limits worth remembering: all testing so far has been automated, so motion smoothness, real-phone performance and how the generated audio actually sounds have only been judged by the owner; villagers walk in straight lines between spots and do not avoid buildings or each other; the Time, Weather and Ship buttons are preview tools kept on purpose for now (see the plan).
