@@ -94,7 +94,7 @@ Decisions the owner made (do not re-ask; build to these):
 
 Stages, in order. Each is reviewed on the private link before going to `main`:
 
-1. Controls and the captain: joystick for ship and shore, following camera ashore, captain at the wheel. Built; awaiting the owner's review.
+1. Controls and the captain: joystick for ship and shore, following camera ashore, captain at the wheel. Done and approved. The owner then said to keep going through the stages; still publish each to the private link and tell them what changed, and push to `main` when they approve.
 2. Treasure maps: bought in taverns or found in bottles, a map screen, digging at the X, treasure of different sizes.
 3. Cannons and damage: guns on all three ships, broadsides with reload, cannonballs, hull health, visible damage, sinking, repairs at shipwrights, what happens when the player goes down.
 4. Factions and enemies: merchants, navy and pirates as proper ships that sail, fight and flee; pirate waters marked on the chart; reputation and being wanted. (The three decorative merchant ships in `wildlife.js` will need replacing by real ships here.)
