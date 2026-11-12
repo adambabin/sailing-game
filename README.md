@@ -26,8 +26,9 @@ Play it: https://adambabin.github.io/sailing-game/
 | Sound / no music / muted | `M` | Sound button |
 
 The dial in the corner shows where the wind is coming from relative to your
-bow. A ship cannot sail straight into the wind (the red wedge). She is fastest
-with the wind on her side or just behind.
+bow. A ship cannot sail straight into the wind (the red wedge), and is slow
+close to it; a hint tells you when to steer further off and zig-zag. She is
+fastest with the wind on her side or just behind.
 
 Speed depends on two things: how hard the wind blows and how much sail is
 up. The weather drifts between calm, fair, fresh and gale on its own, and the

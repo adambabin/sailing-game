@@ -22,7 +22,9 @@ const KNOT = 0.5144; // metres per second in one knot
 const MAX_SPEED = 8; // m/s with full sail in a fair 14-knot breeze
 
 // How well the ship sails at each angle to the wind (degrees off the wind -> efficiency).
-const POLAR = [[0, 0], [28, 0], [45, 0.55], [60, 0.8], [90, 0.97], [115, 1], [150, 0.88], [180, 0.78]];
+// Kinder than a real ship close to the wind: 45 degrees off gives three-quarters speed.
+export const NO_GO = 22; // degrees either side of the wind where the sloop makes no way at all
+const POLAR = [[0, 0], [NO_GO, 0], [35, 0.5], [45, 0.75], [60, 0.9], [90, 0.98], [115, 1], [150, 0.88], [180, 0.78]];
 function polar(deg) {
   for (let i = 1; i < POLAR.length; i++) {
     if (deg <= POLAR[i][0]) {
@@ -522,6 +524,7 @@ export function createShip(waves) {
 
     // --- Wind drives the ship. Square-riggers cannot point as close to the wind as the sloop.
     const eff = polar(s.windAngle - type.pointing * Math.max(0, (120 - s.windAngle) / 120));
+    s.eff = eff; // how much of the wind she is using on this heading, 0 to 1
     // Stronger wind gives more drive, with diminishing returns so a gale is fast but not absurd.
     const windRatio = wind.speed / 14;
     const windFactor = windRatio < 1 ? windRatio : Math.pow(windRatio, 0.6);

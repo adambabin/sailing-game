@@ -21,7 +21,7 @@ import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted } from './factions.
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
-import { createShip, SHIP_COLORS, SHIP_TYPES } from './ship.js';
+import { createShip, SHIP_COLORS, SHIP_TYPES, NO_GO } from './ship.js';
 import { createAudio, MODE_LABELS } from './audio.js';
 
 const canvas = document.getElementById('sea');
@@ -795,7 +795,8 @@ function showToast(text) {
   toast.classList.add('show');
   toastTimer = 3.2;
 }
-let nearName = null;
+let nearName = null, wedgeFor = null;
+const dialWedge = document.getElementById('dial-wedge');
 function updateHud(dt) {
   const s = ship.state;
   gSpeed.textContent = Math.max(0, ship.knots).toFixed(1);
@@ -810,6 +811,12 @@ function updateHud(dt) {
     if (gWindName.textContent !== 'Wind') showToast(name === 'Gale' ? 'A gale is blowing in' : name === 'Light air' ? 'The wind is dying away' : name);
     gWindName.textContent = name;
   }
+  // The red wedge on the dial is as wide as this ship's dead zone (square-riggers need more room).
+  if (wedgeFor !== ship.typeId) {
+    wedgeFor = ship.typeId;
+    const a = ((NO_GO + ship.type.pointing) * Math.PI) / 180, x = (44 * Math.sin(a)).toFixed(1), y = (-44 * Math.cos(a)).toFixed(1);
+    dialWedge.setAttribute('d', `M0 0 L-${x} ${y} A44 44 0 0 1 ${x} ${y} Z`);
+  }
   dialWind.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(s.relWind).toFixed(1)})`);
 
   let text = '', warn = false;
@@ -819,6 +826,7 @@ function updateHud(dt) {
   else if (s.anchorDepth > 0.9) text = action ? '' : s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
   else if ((portNearby || beachNearby) && s.speed < 6) text = 'Drop anchor here to go ashore at ' + (portNearby || beachNearby).name + '.';
   else if (s.inIrons) { text = 'Pointing into the wind. Turn away until the sails fill.'; warn = true; }
+  else if (s.eff < 0.6 && s.sail > 0.25 && s.anchorDepth < 0.1) text = 'Close to the wind, so slow. Steer a little further off it, and zig-zag toward where you are going.';
   else if (s.sail < 0.05 && s.speed < 0.6) text = 'Raise the sails to get under way.';
   else if (wind.speed > 25 && s.sail > 0.75) text = 'Blowing hard. Lower some sail for a steadier ride.';
   hint.textContent = text || hint.textContent;
