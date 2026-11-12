@@ -71,7 +71,9 @@ Agreed plan, in this order (set by the owner):
 3. People in the villages. Done and approved.
 4. More to find on the islands. Done and approved.
 5. More ships: a two-masted brig and a galleon, bought at shipwrights. Done and approved. A **temporary "Ship" button** (and the B key) steps through the three ships without buying them, so the owner can try them; it does not change `save.ships` or `save.shipType`, and reloading returns to the owned ship. Remove it (`tryNextShip` in `main.js`, `#tool-ship` in `index.html`) when the owner says testing is done.
-6. A first-person view from the deck, at the helm. Built; awaiting the owner's review. This is the last item on the agreed plan.
+6. A first-person view from the deck, at the helm. Done and approved.
+
+The agreed plan is complete. Nothing further is queued; ask the owner what they want next. Still open: step 1 (fixing whatever the owner reports from play-testing), and removing the temporary Time, Weather and Ship buttons once they say testing is over.
 
 Preferences the owner has stated: the sailing feel is right as it is; the game should stay relaxing, with no danger or pressure (a gale is a wilder ride, not a threat); features are reviewed on the private link before going public.
 
