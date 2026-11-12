@@ -15,6 +15,12 @@ export const ZONES = [
 ];
 export const zoneAt = (x, z, pad = 0) => ZONES.find((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r + pad) || null;
 
+// Pirate captains have names, and prices on their heads.
+const CAPTAINS = ['Black Tom Vane', 'Mad Annie Roche', 'Old Scratch', 'Redhand Mercer', 'Silent Jacoby', 'Iron Meg Darrow', 'Calico Finn', 'The Widow Sharpe', 'One-Eyed Lorcan', 'Bloody Bess Calloway', 'Gentleman Rook', 'Saltmouth Hale'];
+let nextCaptain = Math.floor(Math.random() * CAPTAINS.length);
+export const newCaptain = () => CAPTAINS[nextCaptain++ % CAPTAINS.length];
+export const BOUNTY = { sloop: 160, brig: 320, galleon: 700 };
+
 // ---- Your standing ------------------------------------------------------------------
 // `wanted` runs from 0 (an honest sailor) to 5. It rises when you fire on merchants or
 // the navy, and falls by one each day or all at once when you pay the fine.

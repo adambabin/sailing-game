@@ -19,6 +19,8 @@ export const save = {
   upgrades: {},
   wanted: 0, // 0 = an honest sailor, up to 5 = hunted by the navy
   piratesSunk: 0,
+  bountyDue: 0, // coins the navy owes you for pirates sunk, to collect at any harbour
+  bountyPaid: 0,
   ships: ['sloop'], // kinds of ship you own
   shipType: 'sloop', // the one you are sailing
   ship: {}, // where the ship was left: position, heading, sail, anchor, time of day

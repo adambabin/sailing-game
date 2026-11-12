@@ -99,11 +99,20 @@ export function createPlaces(game) {
         tavern(isl);
       },
     }, full ? `You are carrying ${MAX_MAPS} maps already` : `Buy a treasure map · ${MAP_PRICE} coins`);
+    // The bounty board: pirate captains at large, and what the navy owes you.
+    const atLarge = game.vessels.list.filter((v) => v.faction === 'pirate' && !v.gone && !v.sinking);
+    const board = [h('h3', {}, 'Bounties'),
+      ...atLarge.map((v) => h('div', { className: 'trade-row' }, h('div', { className: 'ship-info' }, h('b', {}, v.captain), h('div', { className: 'muted' }, `${v.type.name} · ${v.zone.name}`)), h('span', { className: 'purse' }, `${v.bounty} coins`))),
+      ...(atLarge.length ? [] : [h('p', { className: 'muted' }, 'No pirate captain is known to be at large today.')]),
+      ...(save.bountyDue > 0 ? [h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, 'Owed to you'), h('div', { className: 'muted' }, isWanted() ? 'The navy pays no bounty to a wanted captain. Clear your name first.' : 'For pirates sent to the bottom.')),
+        h('button', { id: 'collect-bounty', disabled: isWanted(), onclick: () => { save.coins += save.bountyDue; save.bountyPaid += save.bountyDue; save.bountyDue = 0; persist(); game.audio.coin(); game.toast('Bounty paid in full.'); tavern(isl); } }, `Collect ${save.bountyDue} coins`))] : [])];
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'tavern')} leans over and says:`),
       h('p', { className: 'quote' }, '“' + text + '”'),
       h('div', { className: 'trade-buttons' }, h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another'), buyMap),
-      h('p', { className: 'muted', style: 'margin-top:12px' }, `A sailor in the corner sells old maps, no questions asked. You have ${save.coins} coins.`)
+      h('p', { className: 'muted', style: 'margin-top:12px' }, `A sailor in the corner sells old maps, no questions asked. You have ${save.coins} coins.`),
+      ...board
     );
   }
 

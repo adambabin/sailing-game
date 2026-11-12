@@ -15,6 +15,8 @@ import { createFinds } from './finds.js';
 import { createTreasure } from './treasure.js';
 import { createCombat, inArc } from './combat.js';
 import { createVessels } from './vessels.js';
+import { createLoot } from './loot.js';
+import { cargoCount } from './save.js';
 import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted } from './factions.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
@@ -82,14 +84,35 @@ const fx = {
   },
   sunk: (v, by) => {
     audio.sink();
+    // She leaves her cargo floating. A pirate you sank yourself may have had a map aboard.
+    loot.drop(v, by === me && v.faction === 'pirate' && Math.random() < 0.35 && treasure.canHoldMore());
     if (by !== me) return;
-    if (v.faction === 'pirate') { save.piratesSunk++; persist(); showToast('A pirate ' + v.type.name.toLowerCase() + ' sunk. The islands are safer for it.'); }
+    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; persist(); showToast(`${v.captain} is sunk. ${v.bounty} coins bounty to collect at any tavern.`); }
     else { addWanted(v.faction === 'navy' ? 2 : 1.5); showToast('You have sunk a ' + v.label.toLowerCase() + '. Every port will hear of it.'); }
   },
 };
 const combat = createCombat(waves, fx);
 const vessels = createVessels(waves, fx, (shooter, side, target) => combat.fire(shooter, side, [target]));
-scene.add(combat.group, vessels.group);
+const loot = createLoot(waves);
+scene.add(combat.group, vessels.group, loot.group);
+// Hook a piece of flotsam aboard. Returns false if it has to be left (no room).
+function salvage(item) {
+  if (item.kind === 'coins') { save.coins += item.amount; showToast(`Salvaged a sea chest: ${item.amount} coins`); }
+  else if (item.kind === 'map') {
+    const m = treasure.gainMap();
+    if (!m) return false;
+    showToast('A bottle among the wreckage, and in it ' + treasure.tierName(m).toLowerCase());
+  } else {
+    const room = save.hold - cargoCount();
+    if (room <= 0) { if (toastTimer <= 0) showToast('Cargo adrift, but your hold is full.'); return false; }
+    const n = Math.min(room, item.amount);
+    save.cargo[item.good.id] = (save.cargo[item.good.id] || 0) + n;
+    showToast(`Salvaged ${n} ${n === 1 ? 'crate' : 'crates'} of ${item.good.name.toLowerCase()}`);
+  }
+  audio.coin();
+  persist();
+  return true;
+}
 // The player's ship as the cannon code sees her: the same shape of thing as any other vessel.
 const me = {
   faction: 'player', reload: { port: 0, stbd: 0 }, gone: false, aim: 1,
@@ -126,7 +149,8 @@ function updateDangers() {
   if (near) {
     vPos.set(near.x, near.y + near.top + 6, near.z).project(camera);
     vesselTag.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05;
-    const text = near.sinking ? near.label + ' · sinking' : near.label + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
+    const who = near.captain ? `${near.captain} · ${near.label.toLowerCase()}` : near.label;
+    const text = near.sinking ? who + ' · sinking' : who + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
     if (vesselTag.textContent !== text) vesselTag.textContent = text;
     vesselTag.classList.toggle('foe', near.enemy === me);
     vesselTag.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
@@ -346,7 +370,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure });
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure, vessels });
 const chart = createChart();
 const chartBtn = document.getElementById('tool-chart');
 // Treasure maps are kept with the chart. Each opens as a card you can study.
@@ -740,6 +764,7 @@ function frame() {
   world.wanted = isWanted();
   vessels.update(dt, time, world);
   combat.update(dt, time, targets);
+  loot.update(dt, time, ashore || ship.state.sinking ? null : ship.state, wind, salvage);
   updateDangers();
   placeCrew(time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
@@ -768,11 +793,11 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); }
   },
 };

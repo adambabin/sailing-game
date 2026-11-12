@@ -6,7 +6,7 @@ import { buildNpcModel } from './ship.js';
 import { waveHeight } from './waves.js';
 import { islandCoast, nightLights } from './islands.js';
 import { inArc } from './combat.js';
-import { FACTIONS, ZONES } from './factions.js';
+import { FACTIONS, ZONES, newCaptain, BOUNTY } from './factions.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const HANDLING = { sloop: { cruise: 4.6, turn: 0.34 }, brig: { cruise: 4.0, turn: 0.24 }, galleon: { cruise: 3.6, turn: 0.17 } };
@@ -61,6 +61,7 @@ export function createVessels(waves, fx, fire) {
         if (v.hull <= 0) { v.sinking = 0.001; fx.sunk(v, by); }
       },
     };
+    if (faction === 'pirate') { v.captain = newCaptain(); v.bounty = BOUNTY[typeId]; }
     list.push(v);
     return v;
   }
@@ -105,6 +106,7 @@ export function createVessels(waves, fx, fire) {
         if ((v.away -= dt) <= 0) {
           const p = openWater(player, 1000, v.zone);
           Object.assign(v, { x: p.x, z: p.z, hull: 1, sinking: 0, gone: false, alarm: 0, provoked: 0, enemy: null, goal: openWater(null, 0, v.zone), heading: rand(0, 6.28) });
+          if (v.faction === 'pirate') v.captain = newCaptain(); // a new captain takes over these waters
         }
         v.model.visible = false;
         continue;

@@ -127,7 +127,7 @@ export function createChart() {
       ['Ports visited', `${save.visited.length} of ${ports}`],
       ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
       ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
-      ['Standing', wanted() >= 1 ? `Wanted (${Math.floor(wanted())} of 5)` : save.piratesSunk ? `Honest sailor, ${save.piratesSunk} ${save.piratesSunk === 1 ? 'pirate' : 'pirates'} sunk` : 'Honest sailor'],
+      ['Standing', wanted() >= 1 ? `Wanted (${Math.floor(wanted())} of 5)` : save.piratesSunk ? `Honest sailor, ${save.piratesSunk} ${save.piratesSunk === 1 ? 'pirate' : 'pirates'} sunk` + (save.bountyDue ? `, ${save.bountyDue} coins bounty to collect` : '') : 'Honest sailor'],
       ['Treasure', `${save.treasures} dug up, ${save.maps.length} ${save.maps.length === 1 ? 'map' : 'maps'} in hand`],
       ['Purse', save.coins + ' coins'],
       ['Hold', `${cargoCount()} of ${save.hold} crates` + (cargo ? ` (${cargo})` : '')],
