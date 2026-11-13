@@ -57,6 +57,7 @@ export function createChart() {
     g.setTransform(scale, 0, 0, scale, 0, 0);
   }
 
+  let storm = () => null; // set by main.js: the storm at sea, if any
   function draw(ship, wind, vessels = []) {
     last = { ship, wind, vessels };
     // The stretch of sea in view: all of it, or a window around the ship.
@@ -141,6 +142,22 @@ export function createChart() {
       } else g.drawImage(sprite(f), X(f.x - grid.half), Z(f.z - grid.half), Math.max(2.5, grid.half * 2 * k), Math.max(2.5, grid.half * 2 * k));
     }
 
+    // A storm in sight: a dark, ragged patch with lightning scratched across it.
+    const sk = storm();
+    if (sk && Math.hypot(sk.x - ship.x, sk.z - ship.z) < 3200) {
+      g.save();
+      g.translate(X(sk.x), Z(sk.z));
+      g.fillStyle = 'rgba(52, 58, 72, 0.32)';
+      for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(Math.cos(i * 0.7) * sk.r * k * 0.45, Math.sin(i * 1.3) * sk.r * k * 0.45, sk.r * k * 0.55, 0, 7); g.fill(); }
+      g.strokeStyle = 'rgba(40, 44, 56, 0.85)';
+      g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(-4, -9); g.lineTo(2, -1); g.lineTo(-2, 1); g.lineTo(4, 9); g.stroke();
+      g.fillStyle = '#2c3140';
+      g.font = `italic ${small ? 8 : 11}px ${serif}`;
+      g.fillText('Storm', 0, sk.r * k * 0.9 + 10);
+      g.restore();
+    }
+
     // Sails in sight: tan for merchants, blue for the navy, black for pirates, green for your own.
     for (const v of vessels) {
       if (v.gone || Math.hypot(v.x - ship.x, v.z - ship.z) > 900) continue;
@@ -216,6 +233,7 @@ export function createChart() {
   let timer = 0;
   return {
     get isOpen() { return !panel.hidden; },
+    showStorm(fn) { storm = fn; },
     toggle(ship, wind, vessels) {
       panel.hidden = !panel.hidden;
       if (!panel.hidden) { size(); draw(ship, wind, vessels); writeLog(); }

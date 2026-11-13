@@ -215,6 +215,14 @@ export function createAudio() {
       tone('sawtooth', 90, 0.05, 0.4, 3.5, fx, now, 45);
       burst('lowpass', 500, 0.3, 4.5, now + 0.5);
     },
+    // Thunder: a sharp crack close by, a long low rumble far off.
+    thunder(distance = 1000) {
+      if (!ctx) return;
+      const near = 1 / (1 + distance / 700), now = ctx.currentTime + distance / 340 * 0.35; // sound lags the flash
+      if (distance < 800) burst('highpass', 1800, 0.35 * near, 0.25, now);
+      burst('lowpass', 160 + 500 * near, 0.8 * near, 3.5 + 2 * (1 - near), now + 0.05);
+      burst('lowpass', 90, 0.6 * near, 4.5, now + 0.4);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;

@@ -34,6 +34,8 @@ export function createEnvironment() {
     skip: 0, // hours still to fast-forward (from the Time button)
     w: 0.3, target: 0.3, hold: 50, forced: -1, // weather state
     windSpeed: 12, overcast: 0, rain: 0, night: 0, sea: 0.85,
+    storm: 0, // 0 = no storm here, 1 = the heart of one (set by storms.js)
+    flash: 0, // a lightning flash, 1 at its brightest (set by storms.js)
     sunDir: new THREE.Vector3(), moonDir: new THREE.Vector3(), lightDir: new THREE.Vector3(),
     lightIntensity: 1, discStrength: 1, fogNear: 250, fogFar: 4200, foamAmt: 0.14,
   };
@@ -57,13 +59,16 @@ export function createEnvironment() {
     } else env.target = WEATHERS[env.forced].w;
     const rate = env.forced < 0 ? 0.02 : 0.09;
     env.w += THREE.MathUtils.clamp(env.target - env.w, -rate * dt, rate * dt);
-    const gust = 1 + 0.07 * Math.sin(time * 0.21) + 0.05 * Math.sin(time * 0.53 + 2) * (0.5 + env.w);
-    env.windSpeed = (4 + 28 * env.w) * gust;
-    env.overcast = smooth(0.5, 0.9, env.w);
-    env.rain = smooth(0.78, 0.95, env.w);
-    // The sea takes a while to build up and to settle after the wind changes.
-    env.sea += THREE.MathUtils.clamp(0.5 + 1.15 * env.w - env.sea, -rate * 1.5 * dt, rate * 1.5 * dt);
-    env.foamAmt = 0.1 + 0.3 * smooth(0.15, 1, env.w);
+    // In a storm the weather is at least a full gale, and wilder still at its heart.
+    const s = env.storm, W = Math.max(env.w, s);
+    const gust = 1 + 0.07 * Math.sin(time * 0.21) + 0.05 * Math.sin(time * 0.53 + 2) * (0.5 + W) + 0.12 * s * Math.sin(time * 1.3);
+    env.windSpeed = (4 + 28 * W + 5 * s) * gust;
+    env.overcast = Math.max(smooth(0.5, 0.9, env.w), smooth(0, 0.5, s));
+    env.rain = Math.max(smooth(0.78, 0.95, env.w), smooth(0.15, 0.6, s));
+    // The sea takes a while to build up and to settle after the wind changes (a storm whips it up faster).
+    const seaRate = rate * 1.5 + 0.08 * s;
+    env.sea += THREE.MathUtils.clamp(0.5 + 1.15 * W + 0.5 * s - env.sea, -seaRate * dt, seaRate * dt);
+    env.foamAmt = 0.1 + 0.3 * smooth(0.15, 1, W) + 0.1 * s;
 
     // --- Blend the colour keyframes for this hour
     let i = 1;
@@ -107,7 +112,14 @@ export function createEnvironment() {
     env.discStrength = 1 - o;
     env.glowStrength *= 1 - 0.8 * o;
     env.fogNear = 250 - 170 * env.rain;
-    env.fogFar = 4200 - 1400 * o - 1200 * env.rain;
+    env.fogFar = 4200 - 1400 * o - 1200 * env.rain - 900 * s;
+    // Inside a storm it is darker still; a lightning flash lights everything up for a moment.
+    if (s > 0) for (const f of ['zenith', 'horizon', 'deep', 'mid', 'cloud', 'hemiSky']) env[f].multiplyScalar(1 - 0.35 * s);
+    env.lightIntensity *= 1 - 0.4 * s;
+    if (env.flash > 0) {
+      for (const f of ['zenith', 'horizon', 'cloud', 'hemiSky']) env[f].lerp(grey.setRGB(0.85, 0.88, 1), env.flash * 0.6);
+      env.hemi += env.flash * 2.5;
+    }
   };
 
   env.clock = () => {

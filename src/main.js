@@ -21,6 +21,7 @@ import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted, LORD_AFTER, lordSt
 import * as jobs from './jobs.js';
 import { grant, hasReward } from './rewards.js';
 import { createFishing, FISH, cargoKey, habitat, LOG_REWARDS } from './fishing.js';
+import { createStorms, bearingName, SAFE_SAIL } from './storms.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -372,6 +373,28 @@ ship.root.add(captain.group);
 applyPaint(ship.root);
 const fishing = createFishing(waves);
 scene.add(fishing.group);
+// ---- Storms ---------------------------------------------------------------------------
+const storms = createStorms();
+scene.add(storms.scene);
+const STORM_NOTICES = {
+  inside: 'You are in the storm! Take in sail to half or less, or she will be strained.',
+  passed: 'The storm has passed.',
+};
+let strainSound = 0;
+function updateStorms(dt, time) {
+  const w = shore.state.active ? shore.state : ship.state;
+  const notice = storms.update(dt, time, w, wind, env, camera, { thunder: (d) => audio.thunder(d) });
+  if (notice === 'building') showToast(`A storm is building to the ${bearingName(w, storms.current)}. It is coming this way.`, 6);
+  else if (notice) showToast(STORM_NOTICES[notice], notice === 'inside' ? 6 : 3.2);
+  // Too much sail in a storm strains the ship: she creaks and groans and slowly takes damage.
+  if (!shore.state.active) {
+    const lose = storms.strain(dt, ship.state);
+    if (lose > 0) {
+      ship.state.hull -= lose;
+      if ((strainSound -= dt) <= 0) { strainSound = 1.5 + Math.random() * 2; audio.crunch(30); }
+    }
+  }
+}
 const people = createPeople();
 const finds = createFinds();
 const treasure = createTreasure();
@@ -537,6 +560,7 @@ window.addEventListener('pagehide', saveGame);
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
 const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t, secs) => showToast(t, secs), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES });
 const chart = createChart();
+chart.showStorm(() => storms.current);
 const chartBtn = document.getElementById('tool-chart');
 // Treasure maps are kept with the chart. Each opens as a card you can study.
 const mapList = document.getElementById('chart-maps');
@@ -870,7 +894,13 @@ document.getElementById('pause-help').addEventListener('click', () => { pauseEl.
 pauseSound.addEventListener('click', () => { cycleSound(); audio.pause(true); pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode]; });
 // The testing tools live here too. Each says what it did on the line underneath.
 const pauseNote = document.getElementById('pause-note');
-for (const [id, run] of [['pause-ship', tryNextShip], ['pause-time', skipTime], ['pause-weather', cycleWeather]]) {
+function bringStorm() {
+  const w = shore.state.active ? shore.state : ship.state;
+  storms.spawn(w, wind, 1100);
+  storms.current.age = 60; // already full grown
+  showToast(`A storm is building to the ${bearingName(w, storms.current)}.`);
+}
+for (const [id, run] of [['pause-ship', tryNextShip], ['pause-time', skipTime], ['pause-weather', cycleWeather], ['pause-storm', bringStorm]]) {
   document.getElementById(id).addEventListener('click', () => { run(); pauseNote.textContent = toast.textContent + (id === 'pause-time' ? ' when you resume' : ''); });
 }
 document.getElementById('help-go').addEventListener('click', closeHelp);
@@ -986,7 +1016,7 @@ function updateHud(dt) {
   gTime.textContent = env.clock();
   const name = env.windName();
   if (name !== gWindName.textContent) {
-    if (gWindName.textContent !== 'Wind') showToast(name === 'Gale' ? 'A gale is blowing in' : name === 'Light air' ? 'The wind is dying away' : name);
+    if (gWindName.textContent !== 'Wind' && env.storm < 0.1) showToast(name === 'Gale' ? 'A gale is blowing in' : name === 'Light air' ? 'The wind is dying away' : name);
     gWindName.textContent = name;
   }
   // The red wedge on the dial is as wide as this ship's dead zone (square-riggers need more room).
@@ -1001,6 +1031,8 @@ function updateHud(dt) {
   if (shore.state.active) text = !action && !places.isOpen && shore.state.onWood && shore.state.island.portInfo ? 'Walk up into the village to find the tavern, shipwright and market.' : '';
   else if (s.sinking) { text = 'She is lost. Abandon ship!'; warn = true; }
   else if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
+  else if (storms.state.strain) { text = `Storm! Too much sail: she is being strained. Take in sail to ${Math.round(SAFE_SAIL * 100)}% or less.`; warn = true; }
+  else if (storms.state.level > 0.35 && s.anchorDepth < 0.9) text = 'Riding out the storm under short sail. She is safe like this.';
   else if (fishing.active && fishing.state.state !== 'idle' && Math.abs(s.speed) > 1.6) { text = 'Going too fast to fish. Lower sail or the line comes in.'; warn = true; }
   else if (s.anchorDepth > 0.9) text = action ? '' : s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
   else if ((portNearby || beachNearby) && s.speed < 6) text = 'Drop anchor here to go ashore at ' + (portNearby || beachNearby).name + '.';
@@ -1045,6 +1077,7 @@ function frame() {
   // Paused: nothing moves. The picture is still drawn so the screen does not go blank.
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); return; }
   time += dt;
+  updateStorms(dt, time);
   env.update(dt, time);
   updateWind(time);
   const ashore = shore.state.active;
@@ -1125,13 +1158,13 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, fishing, pressFish, landFish, openFishLog,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, storms, bringStorm, fishing, pressFish, landFish, openFishLog,
   set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   get paused() { return paused; }, setPaused,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); }
   },
 };

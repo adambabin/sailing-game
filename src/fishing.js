@@ -65,7 +65,7 @@ export function waterAt(x, z, env) {
     open: land > 260, // well out to sea
     far: Math.hypot(x - REGIONS[0].x, z - REGIONS[0].z) > 2000,
     night: env.night > 0.5,
-    storm: env.w > 0.85,
+    storm: env.storm > 0.45 || env.w > 0.85,
   };
 }
 const bites = (fish, water) => {
