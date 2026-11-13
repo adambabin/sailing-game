@@ -451,7 +451,56 @@ function buildPort(group, isl, r) {
   });
   keepClear.push({ x: isl.x + ux * (start - 5), z: isl.z + uz * (start - 5), r: 8 }); // the head of the dock
   isl.dock = { x: isl.x + ux * (start + LEN), z: isl.z + uz * (start + LEN) };
-  isl.portInfo = { ux, uz, start, end: start + LEN, places };
+  isl.portInfo = { ux, uz, start, end: start + LEN, places, lots: homeLots(isl, th, places), moorings: mooringSpots(isl, ux, uz, start + LEN) };
+}
+
+// Every port keeps six level plots of land free for a home port the player may build there (see home.js),
+// close to the village, so no trees grow on them. They are found by searching outward from the dock.
+const flatness = (x, z) => {
+  const ys = [[4, 0], [-4, 0], [0, 4], [0, -4]].map(([dx, dz]) => terrainHeight(x + dx, z + dz));
+  return Math.max(...ys) - Math.min(...ys);
+};
+function homeLots(isl, th, places) {
+  const found = [], spots = [];
+  const head = { x: isl.x + Math.cos(th) * coastRadius(isl, th) * 0.9, z: isl.z + Math.sin(th) * coastRadius(isl, th) * 0.9 };
+  for (let k = -16; k <= 16; k++) {
+    for (let f = 0.4; f <= 0.8; f += 0.04) {
+      const a = th + k * 0.09, d = coastRadius(isl, a) * f, x = isl.x + Math.cos(a) * d, z = isl.z + Math.sin(a) * d;
+      spots.push({ x, z, far: Math.hypot(x - head.x, z - head.z) });
+    }
+  }
+  spots.sort((p, q) => p.far - q.far);
+  for (const sp of spots) {
+    if (found.length >= 6) break;
+    const y = terrainHeight(sp.x, sp.z);
+    if (y < 2.2 || y > 26 || flatness(sp.x, sp.z) > 3.2) continue; // above the beach, and fairly level
+    if (obstacles.some((o) => Math.hypot(sp.x - o.x, sp.z - o.z) < o.r + 8)) continue;
+    if (places.some((p) => Math.hypot(sp.x - p.doorX, sp.z - p.doorZ) < 11)) continue;
+    if (found.some((o) => Math.hypot(sp.x - o.x, sp.z - o.z) < 17)) continue;
+    if (onDockLine(isl, th, sp.x, sp.z)) continue;
+    found.push({ x: sp.x, z: sp.z, y, face: Math.atan2(head.x - sp.x, head.z - sp.z) });
+  }
+  for (const l of found) keepClear.push({ x: l.x, z: l.z, r: 9 }); // no trees on the plots
+  return found;
+}
+// Keep plots off the path up from the dock.
+function onDockLine(isl, th, x, z) {
+  const ux = Math.cos(th), uz = Math.sin(th), dx = x - isl.x, dz = z - isl.z;
+  return Math.abs(-dx * uz + dz * ux) < 13 && dx * ux + dz * uz > coastRadius(isl, th) * 0.45;
+}
+// Deep water beside the dock where the player's spare ships can lie at a mooring.
+function mooringSpots(isl, ux, uz, end) {
+  const out = [];
+  const tries = [];
+  for (let along = -30; along <= 60; along += 10) for (let across = 20; across <= 70; across += 10) for (const side of [1, -1]) tries.push([along, across * side]);
+  tries.sort((p, q) => Math.hypot(...p) - Math.hypot(...q)); // nearest the end of the dock first
+  for (const [along, across] of tries) {
+    const x = isl.x + ux * (end + along) - uz * across, z = isl.z + uz * (end + along) + ux * across;
+    if (terrainHeight(x, z) > -4 || islandCoast(x, z) > -0.25 || out.some((o) => Math.hypot(o.x - x, o.z - z) < 26)) continue;
+    out.push({ x, z, heading: Math.atan2(ux, uz) + Math.PI });
+    if (out.length >= 4) break;
+  }
+  return out;
 }
 
 // Is (x, z) on the planks of an island's dock?

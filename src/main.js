@@ -17,11 +17,12 @@ import { createCombat, inArc } from './combat.js';
 import { createVessels } from './vessels.js';
 import { createLoot } from './loot.js';
 import { cargoCount } from './save.js';
-import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted, LORD_AFTER, lordState, lordOf, lordsBeaten } from './factions.js';
+import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted, LORD_AFTER, lordState, lordOf, lordsBeaten, LORDS as LORDS_LIST } from './factions.js';
 import * as jobs from './jobs.js';
 import { grant, hasReward } from './rewards.js';
 import { createFishing, FISH, cargoKey, habitat, LOG_REWARDS } from './fishing.js';
 import { createStorms, bearingName, SAFE_SAIL } from './storms.js';
+import * as homePort from './home.js';
 import { createCreatures, CREATURES, habitat as seaHabitat, LOG_REWARDS as SEA_REWARDS, LEGEND_REWARDS, LEGEND_COINS } from './creatures.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
@@ -494,6 +495,7 @@ try {
 function applyLook() {
   ship.setLook(look);
   vessels.repaintFleet(look);
+  if (typeof home !== 'undefined' && home) home.rebuild(); // the house flag and moored ships wear your colours
   try { localStorage.setItem('tradewind-look', JSON.stringify(look)); } catch {}
 }
 function applyUpgrades() {
@@ -510,6 +512,7 @@ function setShip(id) {
   cam.sailDist = ship.type.cam.dist;
   if (!shore.state.active) cam.dist = ship.type.cam.dist;
   persist();
+  if (typeof home !== 'undefined' && home) home.rebuild(); // the ship you left behind lies at your moorings
 }
 ship.setType(save.ships.includes(save.shipType) ? save.shipType : 'sloop');
 // Bring back the fleet you had, lying just astern.
@@ -564,7 +567,51 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t, secs) => showToast(t, secs), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES });
+// ---- Your home port (see home.js) -----------------------------------------------------------
+var home = homePort.createHome(waves, () => look);
+scene.add(home.group);
+home.rebuild();
+// A fleet ship is laid up at your moorings: she leaves the fleet (no more wages) and waits there.
+function layUp(v) {
+  save.home.moored.push({ type: v.typeId, hull: v.hull });
+  vessels.remove(v); // this also rebuilds the targets and the fleet's hold
+  home.rebuild();
+  showToast(`${v.label} is laid up at your moorings.`);
+}
+// A laid-up ship joins the fleet again, from her mooring.
+function recallShip(i) {
+  const m = save.home.moored.splice(i, 1)[0], spot = homePort.homeIsland().portInfo.moorings[0] || { x: ship.state.x + 40, z: ship.state.z };
+  joinFleet(m.type, m.hull, { x: spot.x, z: spot.z, heading: ship.state.heading });
+  home.rebuild();
+  showToast(`Your ${SHIP_TYPES[m.type].name.toLowerCase()} joins the fleet.`);
+}
+// A night in your own bed: skip ahead to seven in the morning.
+function sleep() {
+  env.skip = (31 - env.hour) % 24 || 24;
+  showToast('You sleep soundly in your own bed.');
+}
+// The trophy hall: everything you have done, in one place.
+function openTrophies() {
+  const p = (t) => mk('p', {}, t), heading = (t) => mk('h3', {}, t);
+  const fishKinds = FISH.filter((f) => save.fishLog[f.id]);
+  const biggest = fishKinds.slice().sort((a, b) => save.fishLog[b.id].best - save.fishLog[a.id].best)[0];
+  const lords = ZONES.map((z, i) => [z, i]).filter(([z]) => save.lords[z.name] && save.lords[z.name].beaten);
+  const legends = CREATURES.filter((c) => c.legend && save.legends[c.id]);
+  places.card('Trophy hall',
+    mk('p', { className: 'muted' }, 'Polished brass, framed charts, and a few things that took some catching.'),
+    heading('Victories'),
+    p(lords.length ? 'Flags of the pirate lords you beat: ' + lords.map(([z, i]) => LORDS_LIST[i].name + ' of ' + z.name).join('; ') + '.' : 'No pirate lord beaten yet. Their flags would fly outside.'),
+    p(legends.length ? 'Legends overcome: ' + legends.map((c) => c.name).join(' and ') + '.' : 'No legend of the sea beaten yet.'),
+    p(`${save.piratesSunk} pirates sunk or taken, ${save.prizes} prizes captured, ${save.bountyPaid} coins in bounties paid.`),
+    heading('The catch'),
+    p(fishKinds.length ? `${fishKinds.length} of ${FISH.length} kinds of fish caught. The biggest on the wall: a ${save.fishLog[biggest.id].best} kg ${biggest.name.toLowerCase()}.` : 'No fish on the wall yet.'),
+    p(`${CREATURES.filter((c) => save.creatures[c.id]).length} of ${CREATURES.length} sea creatures seen.`),
+    heading('Discoveries'),
+    p(`${save.discovered.length} of ${ISLANDS.length} islands charted, ${save.finds.length} curiosities found, ${save.shells.length} shells collected, ${save.treasures} treasure chests dug up.`),
+    p(`${save.jobsDone} jobs done for the taverns, and ${(save.distance / 1852).toFixed(0)} sea miles sailed.`));
+}
+function homeChanged() { home.rebuild(); }
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t, secs) => showToast(t, secs), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES, homeChanged, layUp, recallShip, sleep, openTrophies });
 const chart = createChart();
 chart.showStorm(() => storms.current);
 const chartBtn = document.getElementById('tool-chart');
@@ -648,6 +695,9 @@ function findAction() {
     for (const p of w.island.portInfo ? w.island.portInfo.places : []) {
       if (Math.hypot(w.x - p.doorX, w.z - p.doorZ) < 4.5 || Math.hypot(w.x - p.keeperX, w.z - p.keeperZ) < 3.6) return { label: KEEPER_ACTIONS[p.kind] + p.keeperName, run: () => places.open(w.island, p.kind) };
     }
+    // Your own buildings, in your home port.
+    const door = w.island.name === save.home.port ? home.doorAt(w.x, w.z) : null;
+    if (door) return { label: door.action, run: () => (door.id === 'trophy' ? openTrophies() : places.open(w.island, 'house')) };
     const someone = people.nearby(w);
     if (someone) return { label: someone.kind === 'fisher' ? 'Ask about the fishing' : 'Say hello', run: () => showToast('“' + people.greet(someone, env) + '”') };
     const f = finds.on(w.island);
@@ -675,6 +725,7 @@ actionBtn.addEventListener('click', doAction);
 // Name tags that float over the places you can visit.
 const labelBox = document.getElementById('labels');
 const findLabel = labelBox.appendChild(Object.assign(document.createElement('div'), { className: 'place-label', hidden: true }));
+const homeLabels = Object.values(homePort.LABELS).map((t) => labelBox.appendChild(Object.assign(document.createElement('div'), { className: 'place-label', textContent: t, hidden: true })));
 const labelEls = ['Tavern', 'Shipwright', 'Market'].map((t) => labelBox.appendChild(Object.assign(document.createElement('div'), { className: 'place-label', textContent: t, hidden: true })));
 function updateLabels() {
   const w = shore.state;
@@ -690,6 +741,15 @@ function updateLabels() {
     const p = w.active && !places.isOpen && w.island.portInfo ? w.island.portInfo.places.find((x) => x.label === elm.textContent) : null;
     if (!p) { elm.hidden = true; return; }
     vPos.set(p.x, p.y, p.z).project(camera);
+    elm.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
+    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+  });
+  // Your own buildings, when you are ashore at home and fairly close.
+  const atHome = w.active && !places.isOpen && w.island.name === save.home.port;
+  homeLabels.forEach((elm) => {
+    const d = atHome ? home.doors.find((x) => x.label === elm.textContent) : null;
+    if (!d || Math.hypot(w.x - d.x, w.z - d.z) > 45) { elm.hidden = true; return; }
+    vPos.set(d.x, d.y, d.z).project(camera);
     elm.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
     elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
   });
@@ -1188,7 +1248,7 @@ function frame() {
   if (action && actionBtn.textContent !== action.label) actionBtn.textContent = action.label;
   // Logbook: distance sailed and days at sea.
   save.distance += Math.abs(ship.state.speed) * dt;
-  if (env.hour < lastHour) { save.days++; coolOff(); payWages(); }
+  if (env.hour < lastHour) { save.days++; coolOff(); payWages(); homePort.newDay(); }
   lastHour = env.hour;
   if ((saveTimer -= dt) <= 0) { saveTimer = 10; saveGame(); }
   updateCamera(dt, time, first);
@@ -1214,6 +1274,7 @@ function frame() {
   hullFill.style.width = Math.round(ship.state.hull * 100) + '%';
   hullFill.className = ship.state.hull < 0.3 ? 'grave' : ship.state.hull < 0.6 ? 'hurt' : '';
   treasure.update();
+  home.update(dt, time, wind);
   people.update(dt, time, env, ashore ? shore.state : ship.state, ashore ? shore.state : null);
   updateWake(dt, time);
   applyEnvironment(dt);
@@ -1233,11 +1294,12 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, creatures, openSeaLog, refreshTargets, storms, bringStorm, fishing, pressFish, landFish, openFishLog,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, home, homePort, layUp, recallShip, sleep, openTrophies, jobs, summonLord, pirateDown, creatures, openSeaLog, refreshTargets, storms, bringStorm, fishing, pressFish, landFish, openFishLog,
   set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   get paused() { return paused; }, setPaused,
+  ports: () => ISLANDS.filter((i) => i.portInfo),
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); pickFleetEnemy(1 / 60); updateCreatures(1 / 60, time); }

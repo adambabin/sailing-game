@@ -29,7 +29,10 @@ export const save = {
   lords: {}, // pirate lords, by the name of their waters: { sunk, beaten }
   creatures: {}, // sea creatures seen, by kind: how many times
   legends: {}, // legendary monsters beaten: { kraken: true, ... }
-  fishLog: {}, // fish caught, by kind: { n: how many, best: heaviest in kg }
+  fishLog: {},
+  // Your home port, once you have bought a house: its port, what is built, the warehouse's stock,
+  // ships laid up at the moorings, and what the businesses have made since you last collected.
+  home: { port: '', built: {}, store: {}, moored: [], pending: { coins: 0, goods: {} } }, // fish caught, by kind: { n: how many, best: heaviest in kg }
   earned: [], // rewards that cannot be bought (see rewards.js)
   ships: ['sloop'], // kinds of ship you own
   shipType: 'sloop', // the one you are sailing

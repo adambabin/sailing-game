@@ -36,6 +36,7 @@ export function createShore() {
   };
 
   return {
+    walkable, // can the sailor stand at (x, z)? (used by tests)
     sailor: sailor.group,
     dinghy,
     state,

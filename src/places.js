@@ -9,6 +9,7 @@ import { isWanted, wanted, fine, payFine, priceUp, priceDown, ZONES, LORD_AFTER,
 import * as jobs from './jobs.js';
 import { REWARDS, EARNED_LOOKS, hasReward } from './rewards.js';
 import { FISH, cargoKey, fishPrice } from './fishing.js';
+import * as home from './home.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -135,6 +136,12 @@ export function createPlaces(game) {
         h('div', { className: 'ship-info' }, h('b', {}, o.title), h('div', { className: 'muted' }, o.detail)),
         h('button', { id: 'job-take-' + i, disabled: !!why, onclick: () => { jobs.take(o, save.days); game.toast('Agreed. It is noted in your logbook.'); tavern(isl); } }, why || `Take it · ${o.pay} coins`));
     });
+    // A house of your own: buy one here, or move your home here.
+    const H = save.home, here = H.port === isl.name;
+    const homeRow = here ? [h('p', { className: 'muted' }, 'This is your home port. Your house stands in the village.')]
+      : [h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, H.port ? 'Move your home here' : 'A house for sale'), h('div', { className: 'muted' }, H.port ? `Your home is at ${H.port}. Move here and your buildings, stores and ships come with you.` : 'Make this your home port: a house of your own, and land to build a warehouse, moorings, businesses and a trophy hall.')),
+        h('button', { id: 'buy-home', disabled: save.coins < (H.port ? home.MOVE_PRICE : home.HOME_PRICE), onclick: () => { const moved = home.settle(isl); game.homeChanged(); game.audio.coin(); game.toast(moved ? `Your home is now ${isl.name}.` : `The house is yours. Welcome home to ${isl.name}.`, 5); tavern(isl); } }, `${H.port ? home.MOVE_PRICE : home.HOME_PRICE} coins`))];
     const toGo = jobs.nextRewardIn();
     const work = [h('h3', {}, 'Work'),
       ...inHand,
@@ -157,6 +164,8 @@ export function createPlaces(game) {
       h('div', { className: 'trade-buttons' }, h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another'), buyMap),
       h('p', { className: 'muted', style: 'margin-top:12px' }, `A sailor in the corner sells old maps, no questions asked. You have ${save.coins} coins.`),
       ...work,
+      h('h3', {}, 'Home'),
+      ...homeRow,
       ...board,
       ...lords
     );
@@ -316,7 +325,60 @@ export function createPlaces(game) {
     );
   }
 
-  const builders = { tavern, market, shipwright };
+  // Your house: collect what your businesses have made, use the warehouse and moorings, and build more.
+  function house(isl) {
+    title.textContent = 'Your house at ' + isl.name;
+    const room = () => save.hold - cargoCount();
+    const goodName = (id) => (GOODS.find((g) => g.id === id) || FISH.find((f) => cargoKey(f) === id) || { name: id }).name;
+    const parts = [h('p', { className: 'muted' }, 'The housekeeper has kept things tidy, and the kettle is on.'), purse()];
+    parts.push(h('div', { className: 'trade-row' },
+      h('div', { className: 'ship-info' }, h('b', {}, 'Sleep until morning'), h('div', { className: 'muted' }, 'A night in your own bed. The hours pass quickly.')),
+      h('button', { id: 'home-sleep', onclick: () => { game.sleep(); api.close(); } }, 'Sleep')));
+    // What the businesses have made.
+    const business = Object.keys(home.BUILDINGS).filter((id) => home.BUILDINGS[id].makes && home.has(id));
+    if (business.length) {
+      const waiting = home.pendingText();
+      parts.push(h('h3', {}, 'Your businesses'),
+        h('div', { className: 'trade-row' },
+          h('div', { className: 'ship-info' }, h('b', {}, business.map((id) => home.BUILDINGS[id].name).join(', ')), h('div', { className: 'muted' }, waiting ? 'Waiting for you: ' + waiting + '.' : 'Nothing waiting yet. They make their goods each morning, and hold up to five days of it.')),
+          h('button', { id: 'home-collect', disabled: !waiting, onclick: () => { game.toast(home.collect(room()), 5); game.audio.coin(); house(isl); } }, 'Collect')));
+    }
+    // The warehouse: move cargo between the hold and the store.
+    if (home.has('warehouse')) {
+      const ids = [...new Set([...Object.keys(save.cargo), ...Object.keys(save.home.store)])].filter((id) => id !== 'freight' && ((save.cargo[id] || 0) + (save.home.store[id] || 0)) > 0);
+      const move = (id, n) => () => { home.shift(id, n, room()); house(isl); };
+      parts.push(h('h3', {}, 'Warehouse'), h('p', { className: 'muted' }, `${home.storeCount()} of ${home.WAREHOUSE_SPACE} crates stored · hold ${cargoCount()} of ${save.hold}.`),
+        ...ids.map((id, i) => h('div', { className: 'trade-row' },
+          h('div', {}, h('b', {}, goodName(id)), h('span', { className: 'muted' }, ` aboard ${save.cargo[id] || 0}, stored ${save.home.store[id] || 0}`)),
+          h('div', { className: 'trade-buttons' },
+            h('button', { id: 'store-' + i, disabled: !save.cargo[id], onclick: move(id, 1) }, 'Store 1'),
+            h('button', { id: 'storeall-' + i, disabled: !save.cargo[id], onclick: move(id, 999) }, 'All'),
+            h('button', { id: 'take-' + i, disabled: !save.home.store[id] || room() < 1, onclick: move(id, -1) }, 'Take 1'),
+            h('button', { id: 'takeall-' + i, disabled: !save.home.store[id] || room() < 1, onclick: move(id, -999) }, 'All')))),
+        ...(ids.length ? [] : [h('p', { className: 'muted' }, 'Nothing aboard or in store.')]));
+    }
+    // The moorings: ships laid up here, and fleet ships that could be.
+    if (home.has('moorings')) {
+      const spare = save.ships.filter((id) => id !== save.shipType);
+      parts.push(h('h3', {}, 'Moorings'),
+        h('p', { className: 'muted' }, (spare.length ? `Lying here: your ${spare.map((id) => SHIP_TYPES[id].name.toLowerCase()).join(' and ')}. ` : '') + 'Ships laid up here cost no wages, and are mended while they wait.'),
+        ...save.home.moored.map((m, i) => h('div', { className: 'trade-row' },
+          h('div', { className: 'ship-info' }, h('b', {}, `Laid up: ${SHIP_TYPES[m.type].name.toLowerCase()}`), h('div', { className: 'muted' }, `hull ${Math.round(m.hull * 100)}% · ${game.wages[m.type]} coins a day once she sails`)),
+          h('button', { id: 'recall-' + i, disabled: game.vessels.fleet().length >= 3, onclick: () => { game.recallShip(i); house(isl); } }, 'Join the fleet'))),
+        ...game.vessels.fleet().map((v, i) => h('div', { className: 'trade-row' },
+          h('div', { className: 'ship-info' }, h('b', {}, v.label), h('div', { className: 'muted' }, `in your fleet · hull ${Math.round(v.hull * 100)}% · ${game.wages[v.typeId]} coins a day`)),
+          h('button', { id: 'layup-' + i, onclick: () => { game.layUp(v); house(isl); } }, 'Lay her up'))));
+    }
+    // What is left to build.
+    const todo = Object.entries(home.BUILDINGS).filter(([id]) => !home.has(id));
+    if (todo.length) parts.push(h('h3', {}, 'Build'), ...todo.map(([id, b]) => h('div', { className: 'trade-row' },
+      h('div', { className: 'ship-info' }, h('b', {}, b.name), h('div', { className: 'muted' }, b.detail)),
+      h('button', { id: 'build-' + id, disabled: save.coins < b.cost, onclick: () => { home.build(id); game.homeChanged(); game.audio.coin(); game.toast(`Your ${b.name.toLowerCase()} is built.`); house(isl); } }, `${b.cost} coins`))));
+    if (home.has('trophy')) parts.push(h('div', { className: 'trade-buttons', style: 'margin-top:12px' }, h('button', { id: 'home-trophies', className: 'close', onclick: () => game.openTrophies() }, 'Visit the trophy hall')));
+    body.replaceChildren(...parts);
+  }
+
+  const builders = { tavern, market, shipwright, house };
   const api = {
     get isOpen() { return !!open; },
     open(isl, kind) {

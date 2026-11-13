@@ -129,6 +129,12 @@ export function createChart() {
         g.arc(X(isl.dock.x), Z(isl.dock.z), near ? 3.4 : 2.2, 0, 7);
         g.fill();
       }
+      if (save.home.port === isl.name) { // your home port: a little house
+        const hx = X(isl.dock.x), hz = Z(isl.dock.z) - (near ? 12 : 9), s = near ? 6 : 4.5;
+        g.fillStyle = '#2f6f8f';
+        g.beginPath(); g.moveTo(hx - s, hz); g.lineTo(hx, hz - s); g.lineTo(hx + s, hz); g.closePath(); g.fill();
+        g.fillRect(hx - s * 0.7, hz, s * 1.4, s * 0.9);
+      }
       if (save.finds.includes(isl.name)) { // a little star where you found something
         g.fillStyle = '#b03a2e';
         g.font = `${near ? 13 : 9}px serif`;
@@ -228,6 +234,7 @@ export function createChart() {
       ['Ship', (SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop') + (save.ship.hull < 0.995 ? `, hull at ${Math.round(save.ship.hull * 100)}%` : '')],
       ...(save.fleet.length ? [['Fleet', save.fleet.map((f) => `${SHIP_TYPES[f.type].name.toLowerCase()} ${Math.round(f.hull * 100)}%`).join(', ')]] : []),
       ['Day', save.days],
+      ...(save.home.port ? [['Home port', save.home.port]] : []),
       ['Sailed', (save.distance / NM).toFixed(1) + ' nautical miles'],
       ['Islands found', `${save.discovered.length} of ${ISLANDS.length}`],
       ['Ports visited', `${save.visited.length} of ${ports}`],
