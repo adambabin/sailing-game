@@ -12,6 +12,8 @@ export const FACTIONS = {
 export const ZONES = [
   { name: 'The Serpent’s Run', x: -350, z: 540, r: 300 },
   { name: 'Deadman’s Reach', x: 1210, z: -810, r: 320 },
+  { name: 'The Ash Road', x: 1320, z: -2500, r: 290 },
+  { name: 'The Graveyard', x: 1450, z: 2750, r: 330 },
 ];
 export const zoneAt = (x, z, pad = 0) => ZONES.find((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r + pad) || null;
 

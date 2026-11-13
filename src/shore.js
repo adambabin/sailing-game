@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { paint, applyPaint } from './materials.js';
 import { buildPerson } from './people.js';
-import { terrainHeight, onDock, obstacles, coastRadius, DOCK_TOP } from './islands.js';
+import { terrainHeight, onDock, obstacles, coastRadius, islandPoint, islandAngle, DOCK_TOP } from './islands.js';
 
 const WALK_SPEED = 5, TURN_SPEED = 2.4;
 
@@ -53,14 +53,22 @@ export function createShore() {
         s.boat = { x: isl.x + p.ux * (p.end - 3), z: isl.z + p.uz * (p.end - 3), y: 0.6, reach: 7 };
         dinghy.position.set(isl.x + p.ux * (p.end - 2) - p.uz * 2.9, 0.6, isl.z + p.uz * (p.end - 2) + p.ux * 2.9);
       } else {
-        const th = Math.atan2(ship.z - isl.z, ship.x - isl.x), R = coastRadius(isl, th);
-        const ux = Math.cos(th), uz = Math.sin(th);
-        s.x = isl.x + ux * R * 0.93;
-        s.z = isl.z + uz * R * 0.93;
+        // The beach nearest the ship. If that way is open water (the mouth of a lagoon), look along the shore for sand.
+        let th = islandAngle(isl, ship.x, ship.z), spot = null;
+        const inLagoon = isl.inner && Math.hypot(ship.x - isl.x, ship.z - isl.z) < coastRadius(isl, th) * isl.inner * isl.stretch;
+        const at = inLagoon ? isl.inner + 0.07 : isl.type === 'cliff' ? 0.975 : 0.93, edge = inLagoon ? isl.inner + 0.012 : 0.99; // a cliff island has only a ledge of beach // land on the lagoon side if she lies inside
+        for (let i = 0; i < 44 && !spot; i++) {
+          const t = th + (i % 2 ? -1 : 1) * Math.ceil(i / 2) * 0.14, p = islandPoint(isl, t, coastRadius(isl, t) * at);
+          if (terrainHeight(p.x, p.z) > 0.45) { spot = p; th = t; }
+        }
+        spot = spot || islandPoint(isl, th, coastRadius(isl, th) * at);
+        const R = coastRadius(isl, th), water = islandPoint(isl, th, R * edge), boat = islandPoint(isl, th, R * (at + (edge - at) * 0.5));
+        s.x = spot.x;
+        s.z = spot.z;
         s.y = terrainHeight(s.x, s.z);
-        s.heading = Math.atan2(-ux, -uz); // facing inland
-        s.boat = { x: isl.x + ux * R * 0.96, z: isl.z + uz * R * 0.96, y: 0.95, reach: 6 };
-        dinghy.position.set(isl.x + ux * R * 0.985 - uz * 2.2, 0.95, isl.z + uz * R * 0.985 + ux * 2.2); // pulled up on the sand
+        s.heading = Math.atan2(isl.x - s.x, isl.z - s.z) + (inLagoon ? Math.PI : 0); // facing up the beach
+        s.boat = { x: boat.x, z: boat.z, y: 0.95, reach: 6 };
+        dinghy.position.set(water.x, 0.95, water.z); // pulled up on the sand
       }
       sailor.group.visible = dinghy.visible = true;
       dinghy.rotation.y = s.heading;

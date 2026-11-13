@@ -19,11 +19,12 @@ Play it: https://adambabin.github.io/sailing-game/
 | Skip ahead three hours | `T` | Time button |
 | Change the weather | `R` | Weather button |
 | Go ashore / visit a place / row back | `E` | The yellow button |
-| Chart and logbook | `C` | Chart button |
+| Map and logbook | `M` | Map button |
+| Compass strip | `C` | Compass button |
 | Fire the port / starboard guns | `1` / `2` | The two Fire buttons |
 | Stand at the wheel / view from astern | `V` | View button |
 | Try the next ship (temporary, for testing) | `B` | Ship button |
-| Sound / no music / muted | `M` | Sound button |
+| Sound / no music / muted | `N` | Sound button |
 
 The dial in the corner shows where the wind is coming from relative to your
 bow. A ship cannot sail straight into the wind (the red wedge), and is slow
@@ -35,7 +36,15 @@ up. The weather drifts between calm, fair, fresh and gale on its own, and the
 sea gets rougher as the wind rises. Above about 13 knots you can see the wind
 as pale ribbons streaming past. A full day lasts about 20 minutes.
 
-Five islands have a port. Drop anchor near the dock and go ashore: on foot
+The sea holds 33 named islands in seven regions: the home waters, the
+volcanic Cinder Isles to the north, the atolls of the Pearl Rings to the east
+(you can sail into their lagoons), the sandbars and reefs of the Shallows, the
+Stepping Stones, the cliffs and sea stacks of the Ironbound Coast, and Santa
+Brisa in the west. Reefs lie just under the surface: a sloop floats over them,
+a brig or galleon must go round. The map fills most of the screen, can zoom in
+around your ship, and shows reefs and pirate waters.
+
+Ten islands have a port. Drop anchor near the dock and go ashore: on foot
 the joystick (or the same keys) walks you in any direction and the view swings
 round to follow. Each port has a tavern (local talk and trade
 tips), a market (buy cargo cheap, sell it dear elsewhere) and a shipwright

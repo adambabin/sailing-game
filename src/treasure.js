@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { paint, applyPaint } from './materials.js';
-import { ISLANDS, terrainHeight, coastRadius, onDock, obstacles } from './islands.js';
+import { ISLANDS, terrainHeight, coastRadius, islandPoint, islandGrid, onDock, obstacles } from './islands.js';
 import { save, persist } from './save.js';
 
 export const MAP_PRICE = 60, MAX_MAPS = 3;
@@ -24,7 +24,7 @@ function pickSpot() {
     const isl = ISLANDS[Math.floor(Math.random() * ISLANDS.length)];
     if (save.maps.some((m) => m.island === isl.name)) continue; // one map per island at a time
     const a = rand(0, Math.PI * 2), d = rand(0.3, 0.86);
-    const r = coastRadius(isl, a) * d, x = isl.x + Math.cos(a) * r, z = isl.z + Math.sin(a) * r;
+    const { x, z } = islandPoint(isl, a, coastRadius(isl, a) * d);
     const h = terrainHeight(x, z);
     if (h < 1.2 || h > Math.max(8, isl.H * 0.55)) continue; // not in the surf, not up a cliff
     if (onDock(isl, x, z) || obstacles.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + 3)) continue;
@@ -60,10 +60,11 @@ export function createTreasure() {
     if (bottleSpot.day === save.days) return;
     bottleSpot.day = save.days;
     const isl = ISLANDS[(save.days * 7 + 3) % ISLANDS.length];
-    const a = save.days * 2.4 + 0.7, r = coastRadius(isl, a) * 0.95;
+    let a = save.days * 2.4 + 0.7, p = null;
+    for (let tries = 0; tries < 30; tries++, a += 0.21) { p = islandPoint(isl, a, coastRadius(isl, a) * 0.95); if (terrainHeight(p.x, p.z) > 0.25) break; }
     bottleSpot.island = isl;
-    bottleSpot.x = isl.x + Math.cos(a) * r;
-    bottleSpot.z = isl.z + Math.sin(a) * r;
+    bottleSpot.x = p.x;
+    bottleSpot.z = p.z;
     bottle.position.set(bottleSpot.x, terrainHeight(bottleSpot.x, bottleSpot.z), bottleSpot.z);
     bottle.rotation.y = a;
   }
@@ -145,21 +146,27 @@ export function createTreasure() {
         g.arc((i * 97 + m.coins) % S, (i * 61 + m.coins * 3) % S, 18 + ((i * 29) % 40), 0, 7);
         g.fill();
       }
-      const k = (S * 0.36) / (isl.R * 1.3); // metres to pixels
+      const k = (S * 0.36) / (isl.span * 1.3); // metres to pixels
       const X = (x) => S / 2 + (x - isl.x) * k, Y = (z) => S / 2 + (z - isl.z) * k;
       g.strokeStyle = '#4a3423';
       g.lineJoin = 'round';
-      // Coastline, drawn a little shakily as if by hand.
-      g.beginPath();
-      for (let i = 0; i <= 72; i++) {
-        const th = (i / 72) * Math.PI * 2, r = coastRadius(isl, th) * (1 + 0.012 * Math.sin(i * 5.3));
-        g.lineTo(X(isl.x + Math.cos(th) * r), Y(isl.z + Math.sin(th) * r));
+      // The land, inked in from the island's real shape (so lagoons and long bars come out right).
+      const grid = islandGrid(isl), px = grid.cell * k;
+      for (let j = 0; j < grid.n; j++) {
+        for (let i = 0; i < grid.n; i++) {
+          const v = grid.cells[j * grid.n + i];
+          if (v < 2) continue;
+          const cx = X(isl.x - grid.half + i * grid.cell), cy = Y(isl.z - grid.half + j * grid.cell);
+          g.fillStyle = v >= 4 ? 'rgba(120, 96, 52, 0.55)' : 'rgba(160, 140, 80, 0.42)';
+          g.fillRect(cx - 0.3, cy - 0.3, px + 0.6, px + 0.6);
+          // A dark edge wherever land meets water.
+          g.fillStyle = '#4a3423';
+          if (i === 0 || grid.cells[j * grid.n + i - 1] < 2) g.fillRect(cx - 1, cy, 1.6, px);
+          if (i === grid.n - 1 || grid.cells[j * grid.n + i + 1] < 2) g.fillRect(cx + px - 0.6, cy, 1.6, px);
+          if (j === 0 || grid.cells[(j - 1) * grid.n + i] < 2) g.fillRect(cx, cy - 1, px, 1.6);
+          if (j === grid.n - 1 || grid.cells[(j + 1) * grid.n + i] < 2) g.fillRect(cx, cy + px - 0.6, px, 1.6);
+        }
       }
-      g.closePath();
-      g.fillStyle = 'rgba(160, 140, 80, 0.28)';
-      g.fill();
-      g.lineWidth = 2;
-      g.stroke();
       g.lineWidth = 1.3;
       // Landmarks: hills, a lighthouse, a dock.
       if (isl.H > 20) for (const [dx, dy] of [[0, 0], [-13, 6], [12, 8]]) { g.beginPath(); g.moveTo(S / 2 + dx - 9, S / 2 + dy + 6); g.lineTo(S / 2 + dx, S / 2 + dy - 8); g.lineTo(S / 2 + dx + 9, S / 2 + dy + 6); g.stroke(); }

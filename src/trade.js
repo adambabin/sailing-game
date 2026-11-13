@@ -7,15 +7,23 @@ export const GOODS = [
   { id: 'rum', name: 'Rum', base: 22 },
   { id: 'spice', name: 'Spice', base: 35 },
   { id: 'pearl', name: 'Pearls', base: 60 },
+  { id: 'salt', name: 'Salt', base: 10 },
+  { id: 'obsidian', name: 'Obsidian', base: 45 },
 ];
 
 // Price multipliers per port, in the same order as GOODS (below 1 = cheap here).
 const FACTORS = {
-  'Port Marigold': [1.0, 1.2, 0.65, 1.3, 1.1],
-  'Isla Hibiscus': [1.2, 0.6, 1.2, 0.7, 1.2],
-  'Mango Key': [0.5, 1.4, 1.3, 1.1, 0.85],
-  'Saint Avelle': [1.4, 1.0, 1.4, 1.3, 1.35],
-  'Lantern Isle': [1.3, 1.3, 1.0, 1.2, 0.6],
+  'Port Marigold': [1.0, 1.2, 0.65, 1.3, 1.1, 1.2, 1.3],
+  'Isla Hibiscus': [1.2, 0.6, 1.2, 0.7, 1.2, 1.3, 1.2],
+  'Mango Key': [0.5, 1.4, 1.3, 1.1, 0.85, 1.1, 1.4],
+  'Saint Avelle': [1.4, 1.0, 1.4, 1.3, 1.35, 1.4, 1.5],
+  'Lantern Isle': [1.3, 1.3, 1.0, 1.2, 0.6, 1.0, 1.2],
+  // The far ports. Long runs between them and home pay best.
+  'Cinder Harbour': [1.5, 1.5, 1.3, 1.2, 1.3, 1.3, 0.5],
+  'Ringtown': [1.3, 1.5, 1.2, 1.3, 0.5, 1.1, 1.45],
+  'Driftwood Landing': [1.1, 0.9, 1.3, 1.4, 1.2, 0.45, 1.3],
+  'Anchor Hold': [1.5, 0.7, 0.8, 1.5, 1.5, 1.5, 1.1],
+  'Santa Brisa': [0.7, 0.8, 1.5, 0.6, 1.5, 1.6, 1.6],
 };
 export const PORT_NAMES = Object.keys(FACTORS);
 
@@ -25,6 +33,11 @@ export const TAVERNS = {
   'Mango Key': 'The Sleepy Pelican',
   'Saint Avelle': 'The Saint’s Rest',
   'Lantern Isle': 'The Lamp & Anchor',
+  'Cinder Harbour': 'The Smoking Kettle',
+  'Ringtown': 'The Oyster Bed',
+  'Driftwood Landing': 'The Stranded Whale',
+  'Anchor Hold': 'The Iron Ring',
+  'Santa Brisa': 'The Three Parrots',
 };
 
 // Who minds each place, port by port.
@@ -34,6 +47,11 @@ export const KEEPERS = {
   'Mango Key': { tavern: 'Pelly', market: 'Auntie Jo', shipwright: 'Mateo' },
   'Saint Avelle': { tavern: 'Father Luc', market: 'Celeste', shipwright: 'Anselm' },
   'Lantern Isle': { tavern: 'Wick', market: 'Odile', shipwright: 'Corwin' },
+  'Cinder Harbour': { tavern: 'Ember Sal', market: 'Tobias', shipwright: 'Greta' },
+  'Ringtown': { tavern: 'Nacre', market: 'Old Benno', shipwright: 'Pilar' },
+  'Driftwood Landing': { tavern: 'Jonah', market: 'Wren', shipwright: 'Silas' },
+  'Anchor Hold': { tavern: 'Hobb', market: 'Maud', shipwright: 'Fergus' },
+  'Santa Brisa': { tavern: 'Doña Inés', market: 'Rafael', shipwright: 'Catalina' },
 };
 
 function wobble(port, i, day) {

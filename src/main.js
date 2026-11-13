@@ -7,7 +7,7 @@ import { createEnvironment, WEATHERS } from './environment.js';
 import { createWindFx } from './windfx.js';
 import { createOcean } from './ocean.js';
 import { createSky } from './sky.js';
-import { createIslands, ISLANDS, nightLights, terrainHeight, coastRadius } from './islands.js';
+import { createIslands, ISLANDS, FEATURES, nightLights, terrainHeight, coastAt, updateIslands } from './islands.js';
 import { createShore } from './shore.js';
 import { createWildlife } from './wildlife.js';
 import { createPeople, buildPerson } from './people.js';
@@ -51,7 +51,7 @@ function updateWind(t) {
 // ---- World -----------------------------------------------------------------------
 const waves = buildWaves(WIND_BASE);
 const islands = createIslands();
-const ocean = createOcean(waves, ISLANDS);
+const ocean = createOcean(waves, FEATURES);
 const sky = createSky();
 const ship = createShip(waves);
 // Pick up where the last session left off, as long as that spot is still open water.
@@ -599,8 +599,7 @@ function findAction() {
   portNearby = ISLANDS.find((isl) => isl.portInfo && Math.hypot(s.x - isl.dock.x, s.z - isl.dock.z) < 110) || null;
   // Any island's beach will do if there is no dock nearby.
   beachNearby = portNearby ? null : ISLANDS.find((isl) => {
-    const dx = s.x - isl.x, dz = s.z - isl.z;
-    return Math.hypot(dx, dz) - coastRadius(isl, Math.atan2(dz, dx)) < 110;
+    return coastAt(isl, s.x, s.z) > Math.max(-0.99, -110 / isl.R); // close in to her shore (or inside her lagoon)
   }) || null;
   const ready = s.anchorDepth > 0.9 && Math.abs(s.speed) < 1;
   if (portNearby && ready) return { label: 'Go ashore at ' + portNearby.name, run: () => goAshore(portNearby, true) };
@@ -635,6 +634,40 @@ function updateLabels() {
   });
 }
 
+// ---- The compass: a strip across the top that slides as you turn --------------------
+const compassEl = document.getElementById('compass'), compassBand = document.getElementById('compass-band'), compassBtn = document.getElementById('tool-compass');
+const DEG = 2.4; // pixels per degree on the strip
+// Three turns of the card laid side by side, so it can slide without ever running out.
+for (let d = -360; d < 720; d += 15) {
+  const at = ((d % 360) + 360) % 360;
+  const tick = document.createElement('i');
+  tick.style.left = d * DEG + 'px';
+  compassBand.append(tick);
+  if (at % 45 === 0) compassBand.append(Object.assign(document.createElement('span'), { textContent: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][at / 45], className: at === 0 ? 'north' : at % 90 ? 'minor' : '', style: `left:${d * DEG}px` }));
+}
+let compassOn = false;
+try { compassOn = localStorage.getItem('tradewind-compass') === '1'; } catch {}
+function showCompass() {
+  compassEl.hidden = !compassOn;
+  compassBtn.setAttribute('aria-expanded', String(compassOn));
+  document.body.classList.toggle('compass-on', compassOn);
+}
+function toggleCompass() {
+  compassOn = !compassOn;
+  try { localStorage.setItem('tradewind-compass', compassOn ? '1' : '0'); } catch {}
+  showCompass();
+}
+compassBtn.addEventListener('click', toggleCompass);
+showCompass();
+// The compass reads the way you are looking: the ship's head at sea, your own gaze ashore or at the wheel.
+function updateCompass() {
+  if (!compassOn) return;
+  const w = shore.state;
+  const facing = w.active ? cam.follow + cam.yaw : cam.deck ? ship.state.heading - cam.lookYaw : ship.state.heading;
+  const deg = ((Math.atan2(Math.sin(facing), -Math.cos(facing)) * 180) / Math.PI + 360) % 360;
+  compassBand.style.transform = `translateX(${(-deg * DEG).toFixed(1)}px)`;
+}
+
 // ---- Controls --------------------------------------------------------------------
 const held = { left: false, right: false, up: false, down: false };
 const KEYS = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down' };
@@ -651,8 +684,9 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'Space' && !e.repeat) { toggleAnchor(); e.preventDefault(); }
   else if (e.code === 'KeyT') skipTime();
   else if (e.code === 'KeyR') cycleWeather();
-  else if (e.code === 'KeyM') cycleSound();
-  else if (e.code === 'KeyC') toggleChart();
+  else if (e.code === 'KeyN') cycleSound();
+  else if (e.code === 'KeyM') toggleChart();
+  else if (e.code === 'KeyC') toggleCompass();
   else if (e.code === 'KeyV') toggleView();
   else if (e.code === 'Digit1' && !e.repeat) fire(1);
   else if (e.code === 'Digit2' && !e.repeat) fire(-1);
@@ -837,7 +871,7 @@ function updateHud(dt) {
   let found = null;
   for (const isl of ISLANDS) {
     const d = Math.hypot(s.x - isl.x, s.z - isl.z);
-    if (d < isl.R * 1.5 + 90) found = isl.name;
+    if (d < isl.span * 1.5 + 90) found = isl.name;
   }
   if (found && found !== nearName && !shore.state.active) showToast(found);
   if (found && !save.discovered.includes(found)) {
@@ -905,6 +939,7 @@ function frame() {
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
+  updateIslands(time, wind);
   world.ashore = ashore;
   world.wanted = isWanted();
   pickFleetEnemy(dt);
@@ -930,6 +965,7 @@ function frame() {
   windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
   updateLabels();
+  updateCompass();
   chart.update(dt, ship.state, wind, vessels.list);
   const st = ship.state;
   audio.update(dt, { wind: wind.speed, sea: sea.state, speed: st.speed, rain: env.rain, night: env.night, roll: st.roll, luffing: st.inIrons, nearLand: !!nearName });

@@ -13,25 +13,37 @@ const vertexShader = /* glsl */ `
 uniform float uTime;
 uniform float uSea;
 uniform vec4 uWaves[${WAVE_COUNT}];   // dir.x, dir.z, steepness, wavelength
-uniform vec4 uIslands[${MAX_ISLANDS}]; // x, z, radius, unused
-uniform vec2 uIslandShape[${MAX_ISLANDS}];
+uniform vec4 uIslands[${MAX_ISLANDS}];     // x, z, radius, stretch
+uniform vec4 uIslandShape[${MAX_ISLANDS}]; // wobble 1, wobble 2, rotation, inner edge of a ring (0 = solid)
+uniform vec4 uIslandGap[${MAX_ISLANDS}];   // direction of a ring's opening, its half-width, its sharpness, 1 for a reef
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying float vCrest;
 varying float vHeight;
 varying float vCoast;
 
+// The same "coast coordinate" as rawCoast() in islands.js: positive on land, 0 at the shore, negative at sea.
 float coast(vec2 p) {
   float best = -1.0;
   for (int i = 0; i < ${MAX_ISLANDS}; i++) {
     vec4 I = uIslands[i];
     if (I.z <= 0.0) continue;
     vec2 d = p - I.xy;
-    float dist = length(d);
-    if (dist > I.z * 2.6) continue;
-    float th = atan(d.y, d.x);
-    float R = I.z * (1.0 + 0.18 * sin(3.0 * th + uIslandShape[i].x) + 0.10 * sin(5.0 * th + uIslandShape[i].y));
-    best = max(best, 1.0 - dist / R);
+    if (length(d) > I.z * 2.6 * I.w) continue;
+    vec4 S = uIslandShape[i];
+    float cr = cos(S.z), sr = sin(S.z);
+    vec2 l = vec2((d.x * cr + d.y * sr) / I.w, -d.x * sr + d.y * cr); // into the island's own frame
+    float th = atan(l.y, l.x);
+    float u = length(l) / (I.z * (1.0 + 0.18 * sin(3.0 * th + S.x) + 0.10 * sin(5.0 * th + S.y)));
+    float c = 1.0 - u;
+    vec4 G = uIslandGap[i];
+    if (S.w > 0.0) {
+      c = min(c, u - S.w);
+      float da = atan(sin(th - G.x), cos(th - G.x));
+      c = min(c, (abs(da) - G.y) * G.z);
+    }
+    if (G.w > 0.5) c = min(c, -0.08); // a reef never breaks the surface
+    best = max(best, c);
   }
   return best;
 }
@@ -179,11 +191,12 @@ export function createOcean(waves, islands) {
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setIndex(indices);
 
-  const islandU = [], shapeU = [];
+  const islandU = [], shapeU = [], gapU = [];
   for (let i = 0; i < MAX_ISLANDS; i++) {
     const isl = islands[i];
-    islandU.push(isl ? new THREE.Vector4(isl.x, isl.z, isl.R, 0) : new THREE.Vector4(0, 0, 0, 0));
-    shapeU.push(isl ? new THREE.Vector2(isl.p1, isl.p2) : new THREE.Vector2());
+    islandU.push(isl ? new THREE.Vector4(isl.x, isl.z, isl.R, isl.stretch) : new THREE.Vector4(0, 0, 0, 1));
+    gapU.push(isl ? new THREE.Vector4(isl.gap || 0, isl.gapHalf || 0, isl.gapK, isl.reef ? 1 : 0) : new THREE.Vector4());
+    shapeU.push(isl ? new THREE.Vector4(isl.p1, isl.p2, isl.rot, isl.inner) : new THREE.Vector4());
   }
 
   const uniforms = {
@@ -192,6 +205,7 @@ export function createOcean(waves, islands) {
     uWaves: { value: waves.map((w) => new THREE.Vector4(w.dx, w.dz, w.steep, w.length)) },
     uIslands: { value: islandU },
     uIslandShape: { value: shapeU },
+    uIslandGap: { value: gapU },
     uDeep: { value: new THREE.Color() },
     uMid: { value: new THREE.Color() },
     uShallow: { value: new THREE.Color() },
