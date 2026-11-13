@@ -532,7 +532,7 @@ function cycleSound() {
 soundBtn.addEventListener('click', cycleSound);
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
 document.addEventListener('visibilitychange', () => {
-  audio.pause(document.hidden);
+  audio.pause(document.hidden || paused);
   if (document.hidden) saveGame();
 });
 window.addEventListener('pagehide', saveGame);
@@ -713,6 +713,11 @@ function toggleAnchor() {
   showToast(ship.state.anchorDown ? 'Anchor away' : 'Anchor aweigh');
 }
 window.addEventListener('keydown', (e) => {
+  if (paused && help.hidden) { // while paused, only Escape or Enter do anything: they resume
+    if (e.code === 'Escape' || e.code === 'Enter') setPaused(false);
+    e.preventDefault();
+    return;
+  }
   if (KEYS[e.code]) { held[KEYS[e.code]] = true; e.preventDefault(); }
   else if (e.code === 'Space' && !e.repeat) { toggleAnchor(); e.preventDefault(); }
   else if (e.code === 'KeyT') skipTime();
@@ -730,6 +735,7 @@ window.addEventListener('keydown', (e) => {
     else if (places.isOpen) places.close();
     else if (chart.isOpen) toggleChart();
     else if (e.code === 'Enter') doAction();
+    else setPaused(true); // Escape with nothing open: the pause menu
   }
 });
 window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
@@ -766,7 +772,27 @@ anchorBtn.addEventListener('click', toggleAnchor);
 anchorBtn.setAttribute('aria-pressed', String(ship.state.anchorDown));
 
 const help = document.getElementById('help');
-function closeHelp() { help.hidden = true; }
+function closeHelp() { help.hidden = true; pauseEl.hidden = !paused; } // if opened from the pause menu, go back to it
+
+// ---- Pause: Escape (or the II button) stops the game until you resume ---------------
+const pauseEl = document.getElementById('pause'), pauseSound = document.getElementById('pause-sound');
+let paused = false;
+function setPaused(on) {
+  paused = on;
+  pauseEl.hidden = !on;
+  audio.pause(on);
+  if (on) {
+    for (const k in held) held[k] = false;
+    dropStick();
+    saveGame();
+    pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode];
+  }
+}
+document.getElementById('pausebtn').addEventListener('click', () => setPaused(true));
+document.getElementById('pause-resume').addEventListener('click', () => setPaused(false));
+document.getElementById('pause-map').addEventListener('click', () => { setPaused(false); if (!chart.isOpen) toggleChart(); });
+document.getElementById('pause-help').addEventListener('click', () => { pauseEl.hidden = true; help.hidden = false; });
+pauseSound.addEventListener('click', () => { cycleSound(); audio.pause(true); pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode]; });
 document.getElementById('help-go').addEventListener('click', closeHelp);
 if (save.distance > 100) document.getElementById('help-go').textContent = 'Continue your voyage';
 
@@ -930,6 +956,8 @@ const clock = new THREE.Clock();
 let time = 0, first = true, lastHour = env.hour, saveTimer = 15;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
+  // Paused: nothing moves. The picture is still drawn so the screen does not go blank.
+  if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); return; }
   time += dt;
   env.update(dt, time);
   updateWind(time);
@@ -1013,6 +1041,7 @@ window.game = {
   ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
+  get paused() { return paused; }, setPaused,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
     for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); }

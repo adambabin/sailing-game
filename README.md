@@ -25,6 +25,7 @@ Play it: https://adambabin.github.io/sailing-game/
 | Stand at the wheel / view from astern | `V` | View button |
 | Try the next ship (temporary, for testing) | `B` | Ship button |
 | Sound / no music / muted | `N` | Sound button |
+| Pause | `Esc` | II button |
 
 The dial in the corner shows where the wind is coming from relative to your
 bow. A ship cannot sail straight into the wind (the red wedge), and is slow
