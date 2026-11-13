@@ -71,7 +71,7 @@ The HUD and all CSS live in `index.html`; elements toggle with the `hidden` attr
 
 ## Direction
 
-Art style is settled: the soft "painterly" look. Done so far: sailing, ship customisation (at shipwrights), day/night and weather, sound, going ashore on foot at five ports with tavern, market, shipwright, chart and logbook, saved ship position, life at sea, people in the villages, beach landings with curiosities and shells on every island, three ship types, a first-person view from the wheel, joystick controls with the captain at the wheel.
+Art style is settled: the soft "painterly" look. Done so far: sailing, ship customisation (at shipwrights), day/night and weather, sound, going ashore on foot at ten ports with tavern, market, shipwright, chart and logbook, saved ship position, life at sea, people in the villages, beach landings with curiosities and shells on every island, three ship types, a first-person view from the wheel, joystick controls with the captain at the wheel.
 
 Agreed plan, in this order (set by the owner):
 
@@ -108,7 +108,7 @@ Stages, in order. Each is reviewed on the private link before going to `main`:
 5 and 6 are done and approved (spoils; capture and the player's fleet).
 7. NPC fleets: squadrons, patrols, convoys, battles in progress. Done and approved.
 
-After the second plan the owner asked for a bigger world (about four times the area, 33 islands in seven regions, with atolls, volcanoes, cliffs, sandbars and reefs), a bigger chart on M, and a compass strip on C; built and awaiting their review.
+After the second plan the owner asked for a bigger world (about four times the area, 33 islands in seven regions, with atolls, volcanoes, cliffs, sandbars and reefs), a bigger chart on M, and a compass strip on C. Done and approved.
 
 The second plan is complete. Nothing further is queued; ask the owner what they want next. Balance (enemy strength, loot and bounty amounts, ship prices against the new income) is a first guess that only automated runs have exercised, so expect to retune from their play-testing.
 
