@@ -5,7 +5,8 @@ import { save, cargoCount } from './save.js';
 import { GOODS } from './trade.js';
 import { SHELLS_PER_ISLAND } from './finds.js';
 import { SHIP_TYPES } from './ship.js';
-import { ZONES, wanted } from './factions.js';
+import { ZONES, wanted, lordsBeaten } from './factions.js';
+import * as jobs from './jobs.js';
 
 const NM = 1852;
 const NEAR_SPAN = 2400; // metres across when zoomed in around the ship
@@ -187,9 +188,9 @@ export function createChart() {
   });
   window.addEventListener('resize', () => { if (!panel.hidden && last) { size(); draw(last.ship, last.wind, last.vessels); } });
 
-  function writeLog() {
+  function writeLog(ship = last && last.ship) {
     const ports = ISLANDS.filter((i) => i.portInfo).length;
-    const cargo = GOODS.filter((x) => save.cargo[x.id]).map((x) => `${save.cargo[x.id]} ${x.name.toLowerCase()}`).join(', ');
+    const cargo = [...GOODS.filter((x) => save.cargo[x.id]).map((x) => `${save.cargo[x.id]} ${x.name.toLowerCase()}`), ...(save.cargo.freight ? [`${save.cargo.freight} freight`] : [])].join(', ');
     const rows = [
       ['Ship', (SHIP_TYPES[save.shipType] ? SHIP_TYPES[save.shipType].name : 'Sloop') + (save.ship.hull < 0.995 ? `, hull at ${Math.round(save.ship.hull * 100)}%` : '')],
       ...(save.fleet.length ? [['Fleet', save.fleet.map((f) => `${SHIP_TYPES[f.type].name.toLowerCase()} ${Math.round(f.hull * 100)}%`).join(', ')]] : []),
@@ -200,6 +201,9 @@ export function createChart() {
       ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
       ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
       ['Standing', wanted() >= 1 ? `Wanted (${Math.floor(wanted())} of 5)` : save.piratesSunk ? `Honest sailor, ${save.piratesSunk} ${save.piratesSunk === 1 ? 'pirate' : 'pirates'} sunk` + (save.bountyDue ? `, ${save.bountyDue} coins bounty to collect` : '') : 'Honest sailor'],
+      ['Tavern work', `${save.jobsDone} ${save.jobsDone === 1 ? 'job' : 'jobs'} done`],
+      ...save.jobs.map((j) => ['Job', jobs.summary(j, ship || { x: 0, z: 0 })]),
+      ['Pirate lords', `${lordsBeaten()} of ${ZONES.length} beaten`],
       ['Treasure', `${save.treasures} dug up, ${save.maps.length} ${save.maps.length === 1 ? 'map' : 'maps'} in hand`],
       ['Purse', save.coins + ' coins'],
       ['Hold', `${cargoCount()} of ${save.hold} crates` + (cargo ? ` (${cargo})` : '')],

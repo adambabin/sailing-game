@@ -540,7 +540,7 @@ export function createShip(waves) {
 
     // --- Steering: the rudder needs water flowing past it to bite
     const bite = 0.22 + 0.78 * Math.min(1, Math.abs(s.speed) / 4);
-    let turn = -s.rudder * type.turn * bite;
+    let turn = -s.rudder * type.turn * (s.turnBonus || 1) * bite;
     if (s.anchorDepth > 0.9) turn = -Math.sin(s.relWind / 2) * 0.3; // swing head to wind at anchor
     s.heading += turn * dt;
 

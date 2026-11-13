@@ -8,7 +8,7 @@ import { applyPaint } from './materials.js';
 import { waveHeight } from './waves.js';
 import { islandCoast, nearestIsland, nightLights, ISLANDS, WORLD } from './islands.js';
 import { inArc } from './combat.js';
-import { FACTIONS, ZONES, newCaptain, BOUNTY } from './factions.js';
+import { FACTIONS, ZONES, newCaptain, BOUNTY, LORD_BOUNTY } from './factions.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const HANDLING = { sloop: { cruise: 4.6, turn: 0.34 }, brig: { cruise: 4.0, turn: 0.24 }, galleon: { cruise: 3.6, turn: 0.17 } };
@@ -59,6 +59,7 @@ export function createVessels(waves, fx, fire) {
       zone, x: start.x, z: start.z, y: 0, heading: rand(0, 6.28), speed: h.cruise, cruise: h.cruise, turn: h.turn, vx: 0, vz: 0,
       hull: 1, sinking: 0, gone: false, away: 0, goal: zone ? openWater(null, 0, zone) : offAPort(), bob: rand(0, 6),
       aim: 2.1, power: 0.55, // other ships' gunnery is looser and lighter than yours, so a fight is winnable
+      tough: 1, // a pirate lord's flagship is stouter than an ordinary ship of her kind
       alarm: 0, // seconds she will keep running from whoever fired on her
       provoked: 0, // seconds she will keep fighting the player for having been fired on
       struck: 0, // seconds left to board her after she has struck her colours (0 = still flying them)
@@ -72,7 +73,7 @@ export function createVessels(waves, fx, fire) {
       // A cannonball has struck her.
       hit(damage, by) {
         if (v.sinking) return;
-        v.hull = Math.max(0, v.hull - damage / v.type.hullMax);
+        v.hull = Math.max(0, v.hull - damage / (v.type.hullMax * v.tough));
         v.attacker = by;
         if (by.faction === 'player') v.assist = 90;
         if (v.faction === 'merchant') {
@@ -173,6 +174,7 @@ export function createVessels(waves, fx, fire) {
     for (let n = list.length - 1; n >= 0; n--) {
       const v = list[n];
       if (v.gone) {
+        if (v.lord) { remove(v); continue; } // a lord who got away comes back only when you next enter their waters
         // After a while another ship of her kind comes over the horizon.
         if ((v.away -= dt) <= 0) {
           const p = openWater(player, 1000, v.zone);
@@ -285,6 +287,20 @@ export function createVessels(waves, fx, fire) {
         v.model.traverse((o) => { const p = o.userData.paint; if (p && p.part && look[p.part] !== undefined) p.color = look[p.part]; });
         applyPaint(v.model);
       }
+    },
+    // A pirate lord comes out: a stout galleon, well away from `player`, with the local squadron in company.
+    addLord(zone, lord, player) {
+      const v = add('galleon', 'pirate', zone, lord.look);
+      // She appears on the far side of her waters from you, so you see her coming.
+      let ax = zone.x - player.x, az = zone.z - player.z;
+      if (Math.hypot(ax, az) < 30) { const a = rand(0, 6.28); ax = Math.cos(a); az = Math.sin(a); }
+      const al = Math.hypot(ax, az);
+      let at = { x: zone.x + (ax / al) * zone.r * 0.9, z: zone.z + (az / al) * zone.r * 0.9 };
+      if (islandCoast(at.x, at.z) > -0.9) at = openWater(player, 200, zone);
+      Object.assign(v, { x: at.x, z: at.z, heading: Math.atan2(player.x - at.x, player.z - at.z), lord: true, captain: lord.name, bounty: LORD_BOUNTY, label: 'Pirate lord’s galleon', tough: 1.3, aim: 1.8, power: 0.62 });
+      let slot = 0;
+      for (const o of list) if (o !== v && o.faction === 'pirate' && o.zone === zone) { o.leader = v; o.slot = slot++; }
+      return v;
     },
     // Close up the stations after a ship leaves the fleet.
     renumber() { list.filter((v) => v.fleet).forEach((v, i) => (v.slot = i)); },

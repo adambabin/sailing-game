@@ -23,6 +23,11 @@ export const save = {
   bountyPaid: 0,
   fleet: [], // ships sailing in company with you: { type, hull }
   prizes: 0, // ships captured
+  jobs: [], // tavern work in hand
+  jobsTaken: [], // today's offers already accepted, so they are not offered twice
+  jobsDone: 0,
+  lords: {}, // pirate lords, by the name of their waters: { sunk, beaten }
+  earned: [], // rewards that cannot be bought (see rewards.js)
   ships: ['sloop'], // kinds of ship you own
   shipType: 'sloop', // the one you are sailing
   ship: {}, // where the ship was left: position, heading, sail, anchor, time of day

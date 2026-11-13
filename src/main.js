@@ -17,7 +17,9 @@ import { createCombat, inArc } from './combat.js';
 import { createVessels } from './vessels.js';
 import { createLoot } from './loot.js';
 import { cargoCount } from './save.js';
-import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted } from './factions.js';
+import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted, LORD_AFTER, lordState, lordOf, lordsBeaten } from './factions.js';
+import * as jobs from './jobs.js';
+import { grant, hasReward } from './rewards.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -92,10 +94,10 @@ const fx = {
     loot.drop(v, yours && v.faction === 'pirate' && Math.random() < 0.35 && treasure.canHoldMore());
     if (!yours) {
       // Someone else finished a pirate you had been fighting: the navy pays you half for your part.
-      if (v.faction === 'pirate' && v.assist > 0) { const half = Math.round(v.bounty / 2); save.bountyDue += half; persist(); showToast(`${v.captain} is sunk. ${half} coins for your part in it.`); }
+      if (v.faction === 'pirate' && v.assist > 0) { const half = Math.round(v.bounty / 2); save.bountyDue += half; const more = pirateDown(v); persist(); showToast(`${v.captain} is sunk. ${half} coins for your part in it.` + more, more ? 9 : 3.2); }
       return;
     }
-    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; persist(); showToast(`${v.captain} is sunk. ${v.bounty} coins bounty to collect at any tavern.`); }
+    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; const more = pirateDown(v); persist(); showToast(`${v.captain} is sunk. ${v.bounty} coins bounty to collect at any tavern.` + more, more ? 9 : 3.2); }
     else { addWanted(v.faction === 'navy' ? 2 : 1.5); showToast('You have sunk a ' + v.label.toLowerCase() + '. Every port will hear of it.'); }
   },
   // A beaten ship has hauled down her flag.
@@ -103,6 +105,30 @@ const fx = {
   // A ship has left the game for good (one of your fleet, sunk or sold).
   left: () => { refreshTargets(); syncFleet(); },
 };
+// A pirate has been sunk or taken by you (or finished by others after you had hit her). This settles
+// hunting jobs, and counts toward drawing out the lord of those waters. Returns words to add to the
+// notice: that the lord is coming, or, if she was the lord, what beating her has earned.
+function pirateDown(v) {
+  jobs.pirateBeaten(v.zone.name);
+  const L = lordState(v.zone);
+  if (v.lord) {
+    L.beaten = true;
+    const won = lordOf(v.zone).rewards.map(grant).filter(Boolean);
+    if (lordsBeaten() === ZONES.length) { const last = grant('admiral'); if (last) won.push(last); }
+    applyUpgrades();
+    return won.length ? ` A pirate lord is beaten! Yours: ${won.join(', ')}.` : '';
+  }
+  if (L.beaten) return '';
+  L.sunk++;
+  return L.sunk === LORD_AFTER ? ` Word is that ${lordOf(v.zone).name} will come out for you in ${v.zone.name}.` : '';
+}
+// The lord of these waters makes sail to meet you.
+function summonLord(zone) {
+  const v = vessels.addLord(zone, lordOf(zone), me);
+  refreshTargets();
+  showToast(`A great galleon is standing toward you: ${v.captain}, lord of ${zone.name}.`, 8);
+  return v;
+}
 const combat = createCombat(waves, fx);
 const vessels = createVessels(waves, fx, (shooter, side, target) => combat.fire(shooter, side, [target]));
 const loot = createLoot(waves);
@@ -132,11 +158,11 @@ const me = {
   get heading() { return ship.state.heading; },
   get vx() { return Math.sin(ship.state.heading) * ship.state.speed; }, get vz() { return Math.cos(ship.state.heading) * ship.state.speed; },
   get size() { return ship.type.size; }, get top() { return ship.type.top; }, get guns() { return ship.guns; },
-  get reloadTime() { return ship.type.reload; }, get hull() { return ship.state.hull; }, get sinking() { return ship.state.sinking; },
+  get reloadTime() { return ship.type.reload * (hasReward('quickmatch') ? 0.8 : 1); }, get power() { return hasReward('longguns') ? 1.2 : 1; }, get hull() { return ship.state.hull; }, get sinking() { return ship.state.sinking; },
   hit(damage) {
     const s = ship.state;
     if (s.sinking || shore.state.active) return; // nobody fires on an empty ship at anchor
-    s.hull = Math.max(0, s.hull - damage / ship.type.hullMax);
+    s.hull = Math.max(0, s.hull - (damage * (hasReward('ironwood') ? 0.8 : 1)) / ship.type.hullMax);
     if (s.hull <= 0) { s.sinking = 0.001; audio.sink(); showToast('She is going down!'); }
   },
 };
@@ -200,7 +226,7 @@ function boardPrize(v) {
   // Taking her counts as beating her: bounty for a pirate, a darker name for an honest ship.
   const claim = () => {
     save.prizes++;
-    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; } else addWanted(1, 1);
+    if (v.faction === 'pirate') { save.piratesSunk++; save.bountyDue += v.bounty; const more = pirateDown(v); if (more) setTimeout(() => showToast(more.trim(), 9), 3500); } else addWanted(1, 1);
     v.struck = 0; v.gone = true; v.away = 90 + Math.random() * 60;
   };
   const row = (id, title, detail, button, enabled, run) => mk('div', { className: 'trade-row' },
@@ -251,6 +277,11 @@ const wantedChip = document.getElementById('wanted'), vesselTag = document.getEl
 let inZone = null;
 function updateDangers() {
   const s = ship.state, zone = zoneAt(s.x, s.z);
+  // Once you have thinned out a lord's ships, they come out to meet you whenever you are in their waters.
+  if (zone && !shore.state.active && !s.sinking) {
+    const L = lordState(zone);
+    if (!L.beaten && L.sunk >= LORD_AFTER && !vessels.list.some((v) => v.lord && v.zone === zone)) { inZone = zone; summonLord(zone); }
+  }
   if (zone !== inZone) {
     if (zone) showToast('Pirate waters: ' + zone.name);
     else if (inZone) showToast('Clear of ' + inZone.name);
@@ -289,6 +320,7 @@ function lostAtSea() {
   const s = ship.state, lost = ship.type.name.toLowerCase(), wasSloop = ship.typeId === 'sloop';
   const crates = Object.values(save.cargo).reduce((a, n) => a + n, 0);
   save.cargo = {};
+  jobs.loseFreight(); // freight you were carrying for a tavern went down with her
   if (!wasSloop) save.ships = save.ships.filter((id) => id !== ship.typeId);
   const next = vessels.fleet().find((v) => !v.sinking);
   if (next) {
@@ -434,7 +466,8 @@ function applyLook() {
 }
 function applyUpgrades() {
   save.hold = ship.type.hold + (save.upgrades.hold ? 10 : 0) + vessels.fleet().reduce((a, v) => a + (v.sinking ? 0 : v.type.hold), 0); // the fleet's holds count too
-  ship.state.speedBonus = save.upgrades.sails ? 1.1 : 1;
+  ship.state.speedBonus = (save.upgrades.sails ? 1.1 : 1) * (hasReward('stormrig') ? 1.06 : 1);
+  ship.state.turnBonus = hasReward('copper') ? 1.15 : 1; // earned fittings: see rewards.js
 }
 // Change to another kind of ship you own (done at a shipwright).
 function setShip(id) {
@@ -505,7 +538,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveGame);
 
 // ---- Ports: going ashore, visiting places, the chart ------------------------------
-const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t) => showToast(t), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES });
+const places = createPlaces({ look, applyLook, applyUpgrades, audio, toast: (t, secs) => showToast(t, secs), ship, setShip, treasure, vessels, shipValue, syncFleet, wages: WAGES });
 const chart = createChart();
 const chartBtn = document.getElementById('tool-chart');
 // Treasure maps are kept with the chart. Each opens as a card you can study.
@@ -824,10 +857,10 @@ const gSpeed = el('g-speed'), gHeading = el('g-heading'), gSail = el('g-sail'), 
 const dialWind = el('dial-wind'), toast = el('toast'), hint = el('hint');
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 let toastTimer = 0;
-function showToast(text) {
+function showToast(text, seconds = 3.2) {
   toast.textContent = text;
   toast.classList.add('show');
-  toastTimer = 3.2;
+  toastTimer = seconds;
 }
 let nearName = null, wedgeFor = null;
 const dialWedge = document.getElementById('dial-wedge');
@@ -907,7 +940,8 @@ function frame() {
   const input = ashore || sunk ? { steer: 0, sail: 0 } : { steer: push.x, sail: push.y };
   if (sunk && (ship.state.sinking += dt) > 7) lostAtSea();
   // Riding at anchor, the crew patch what they can. Proper repairs need a shipwright.
-  if (ship.state.anchorDepth > 0.9 && ship.state.hull < 0.6 && !sunk) ship.state.hull = Math.min(0.6, ship.state.hull + dt * 0.008);
+  const patchTo = hasReward('crew') ? 0.8 : 0.6; // a seasoned crew (earned from tavern work) do better
+  if (ship.state.anchorDepth > 0.9 && ship.state.hull < patchTo && !sunk) ship.state.hull = Math.min(patchTo, ship.state.hull + dt * (hasReward('crew') ? 0.014 : 0.008));
   ship.update(dt, time, input, wind);
   if (ashore) {
     // Turn the push into a direction on the ground, measured from where the camera is looking.
@@ -976,7 +1010,7 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown,
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   // Fast-forward the sailing simulation by a number of seconds.

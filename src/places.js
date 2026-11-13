@@ -5,7 +5,9 @@ import { GOODS, TAVERNS, buyPrice, sellPrice, bestRoute } from './trade.js';
 import { ISLANDS } from './islands.js';
 import { SHIP_TYPES } from './ship.js';
 import { MAP_PRICE, MAX_MAPS } from './treasure.js';
-import { isWanted, wanted, fine, payFine, priceUp, priceDown } from './factions.js';
+import { isWanted, wanted, fine, payFine, priceUp, priceDown, ZONES, LORD_AFTER, LORD_BOUNTY, lordState, lordOf } from './factions.js';
+import * as jobs from './jobs.js';
+import { REWARDS, EARNED_LOOKS, hasReward } from './rewards.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -29,7 +31,7 @@ const UPGRADES = [
   { id: 'hold', name: 'Bigger hold', detail: 'Carry 10 more crates', cost: 150 },
   { id: 'sails', name: 'Finer sailcloth', detail: 'About a tenth faster in any wind', cost: 250 },
 ];
-export const ALL_LOOK_VALUES = Object.fromEntries(Object.keys(BASIC).map((k) => [k, [...BASIC[k], ...SPECIAL[k]]]));
+export const ALL_LOOK_VALUES = Object.fromEntries(Object.keys(BASIC).map((k) => [k, [...BASIC[k], ...SPECIAL[k], ...EARNED_LOOKS[k]]]));
 
 const LORE = [
   'Wind on your beam and she flies. Wind on your nose and she sulks. That is all there is to sailing, friend.',
@@ -107,12 +109,52 @@ export function createPlaces(game) {
       ...(save.bountyDue > 0 ? [h('div', { className: 'trade-row' },
         h('div', { className: 'ship-info' }, h('b', {}, 'Owed to you'), h('div', { className: 'muted' }, isWanted() ? 'The navy pays no bounty to a wanted captain. Clear your name first.' : 'For pirates sent to the bottom.')),
         h('button', { id: 'collect-bounty', disabled: isWanted(), onclick: () => { save.coins += save.bountyDue; save.bountyPaid += save.bountyDue; save.bountyDue = 0; persist(); game.audio.coin(); game.toast('Bounty paid in full.'); tavern(isl); } }, `Collect ${save.bountyDue} coins`))] : [])];
+    // Work: what you have in hand, and what this tavern is offering today.
+    const done = (job) => () => {
+      const reward = jobs.finish(job);
+      game.applyUpgrades();
+      game.audio.coin();
+      game.toast(`Paid ${job.pay} coins.` + (reward ? ` And for good service: ${reward.toLowerCase()}.` : ''), reward ? 8 : 3.2);
+      tavern(isl);
+    };
+    const inHand = save.jobs.map((job, i) => {
+      const lost = jobs.freightLost(job), ready = !lost && jobs.canFinish(job, isl);
+      return h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, job.title), h('div', { className: 'muted' }, lost ? 'The freight is lost. There is nothing to deliver.' : ready ? `Done. ${job.pay} coins are waiting for you.` : jobs.isDone(job) && job.to !== isl.name ? `Not here: ${job.to} is ${jobs.whereabouts(isl, jobs.target(job))}.` : `Still to do. It lies ${jobs.whereabouts(isl, jobs.target(job))}.`)),
+        h('div', { className: 'trade-buttons' },
+          ...(ready ? [h('button', { id: 'job-done-' + i, onclick: done(job) }, `Collect ${job.pay}`)] : []),
+          ...(ready ? [] : [h('button', { id: 'job-drop-' + i, onclick: () => { jobs.abandon(job); tavern(isl); } }, 'Give it up')])));
+    });
+    const onOffer = jobs.offers(isl, save.days).map((o, i) => {
+      const why = jobs.cannotTake(o);
+      return h('div', { className: 'trade-row' },
+        h('div', { className: 'ship-info' }, h('b', {}, o.title), h('div', { className: 'muted' }, o.detail)),
+        h('button', { id: 'job-take-' + i, disabled: !!why, onclick: () => { jobs.take(o, save.days); game.toast('Agreed. It is noted in your logbook.'); tavern(isl); } }, why || `Take it · ${o.pay} coins`));
+    });
+    const toGo = jobs.nextRewardIn();
+    const work = [h('h3', {}, 'Work'),
+      ...inHand,
+      ...onOffer,
+      ...(onOffer.length ? [] : [h('p', { className: 'muted' }, 'Nothing more on offer here today. Try again tomorrow, or another tavern.')]),
+      h('p', { className: 'muted' }, `You have done ${save.jobsDone} ${save.jobsDone === 1 ? 'job' : 'jobs'} for the taverns.` + (toGo ? ` The harbours reward good service: ${toGo} more for something that cannot be bought.` : ''))];
+    // The four pirate lords: where each keeps, and how you stand with them.
+    const lords = [h('h3', {}, 'The pirate lords'), ...ZONES.map((zone) => {
+      const L = lordState(zone), lord = lordOf(zone), out = game.vessels.list.some((v) => v.lord && v.zone === zone && !v.gone);
+      const prize = lord.rewards.map((id) => REWARDS[id].name.toLowerCase()).join(' and ');
+      const state = L.beaten ? `Beaten by you. You won ${prize}.`
+        : out ? 'Out in a great galleon, looking for you.'
+        : L.sunk >= LORD_AFTER ? `Will come out for you when you next sail into ${zone.name}.`
+        : `Keeps out of sight. Sink or take ${LORD_AFTER - L.sunk} more of their ships in ${zone.name} to draw them out.`;
+      return h('div', { className: 'trade-row' }, h('div', { className: 'ship-info' }, h('b', {}, lord.name), h('div', { className: 'muted' }, `${zone.name}, ${jobs.whereabouts(isl, zone)}. ${state}`)), h('span', { className: 'purse' }, L.beaten ? 'Beaten' : `${LORD_BOUNTY} coins`));
+    })];
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'tavern')} leans over and says:`),
       h('p', { className: 'quote' }, '“' + text + '”'),
       h('div', { className: 'trade-buttons' }, h('button', { id: 'tavern-more', className: 'go', onclick: () => tavern(isl) }, 'Hear another'), buyMap),
       h('p', { className: 'muted', style: 'margin-top:12px' }, `A sailor in the corner sells old maps, no questions asked. You have ${save.coins} coins.`),
-      ...board
+      ...work,
+      ...board,
+      ...lords
     );
   }
 
@@ -156,7 +198,7 @@ export function createPlaces(game) {
       const stock = key === 'hull' ? [specials[pi % 4], specials[(pi + 1) % 4]] : key === 'pattern' ? [specials[pi % 2]] : [specials[(pi + (key === 'flag' ? 1 : 0)) % 3]];
       const cost = key === 'pattern' ? CLOTH_COST : PAINT_COST;
       const owns = (v) => BASIC[key].includes(v) || save.owned.includes(`${key}:${v}`) || game.look[key] === v;
-      const values = [...BASIC[key], ...specials.filter((v) => owns(v) || stock.includes(v))];
+      const values = [...BASIC[key], ...specials.filter((v) => owns(v) || stock.includes(v)), ...EARNED_LOOKS[key].filter((v) => owns(v))];
       const row = h('div', { className: 'swatches' });
       for (const v of values) {
         const owned = owns(v);
@@ -240,6 +282,9 @@ export function createPlaces(game) {
           },
         }, has ? 'Fitted' : `${u.cost} coins`));
     });
+    // Fittings that were earned, not bought. They go with you from ship to ship.
+    const fitted = Object.keys(REWARDS).filter((id) => REWARDS[id].fit && hasReward(id));
+    const earned = fitted.length ? [h('h3', {}, 'Earned fittings'), ...fitted.map((id) => h('div', { className: 'trade-row' }, h('div', {}, h('b', {}, REWARDS[id].name), h('span', { className: 'muted' }, ' ' + REWARDS[id].detail)), h('span', { className: 'purse' }, 'Fitted')))] : [];
     body.replaceChildren(
       h('p', { className: 'muted' }, `${keeper(isl, 'shipwright')} wipes their hands and shows you what is in stock.`),
       purse(),
@@ -251,7 +296,8 @@ export function createPlaces(game) {
       h('h3', {}, 'Paint and fittings'),
       h('div', { className: 'look-rows' }, ...rows),
       h('p', { className: 'muted' }, `Ringed paints cost ${PAINT_COST} coins, once. Every shipwright stocks different ones.`),
-      ...upgrades
+      ...upgrades,
+      ...earned
     );
   }
 

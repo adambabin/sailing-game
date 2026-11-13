@@ -21,6 +21,21 @@ export function sailPattern(kind, stripe) {
   g.fillStyle = '#' + new THREE.Color(stripe).getHexString();
   if (kind === 'stripes') for (let i = 0; i < 4; i++) g.fillRect(i * 32 + 16, 0, 16, 128);
   if (kind === 'bands') for (let i = 0; i < 3; i++) g.fillRect(0, i * 44 + 14, 128, 14);
+  // The cloths below cannot be bought; they are earned (see rewards.js).
+  if (kind === 'checks') for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2) g.fillRect(i * 32, j * 32, 32, 32);
+  if (kind === 'diamonds') {
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      const x = i * 64 + 32, y = j * 64 + 32;
+      g.beginPath(); g.moveTo(x, y - 24); g.lineTo(x + 18, y); g.lineTo(x, y + 24); g.lineTo(x - 18, y); g.fill();
+    }
+  }
+  if (kind === 'sun') {
+    g.beginPath(); g.arc(64, 64, 26, 0, 7); g.fill();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2, w = 0.11;
+      g.beginPath(); g.moveTo(64 + Math.cos(a - w) * 32, 64 + Math.sin(a - w) * 32); g.lineTo(64 + Math.cos(a) * 60, 64 + Math.sin(a) * 60); g.lineTo(64 + Math.cos(a + w) * 32, 64 + Math.sin(a + w) * 32); g.fill();
+    }
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   patterns.set(key, tex);

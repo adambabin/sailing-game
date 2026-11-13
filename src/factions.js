@@ -23,6 +23,25 @@ let nextCaptain = Math.floor(Math.random() * CAPTAINS.length);
 export const newCaptain = () => CAPTAINS[nextCaptain++ % CAPTAINS.length];
 export const BOUNTY = { sloop: 160, brig: 320, galleon: 700 };
 
+// ---- The pirate lords -----------------------------------------------------------------
+// Each stretch of pirate water has a lord, in the same order as ZONES. A lord keeps out of
+// sight until you have sunk or taken LORD_AFTER of their ships, then comes out in a big
+// galleon to deal with you. Beating one earns a large bounty and the two rewards listed.
+export const LORD_AFTER = 3, LORD_BOUNTY = 1500;
+export const LORDS = [
+  { name: 'Isaura Vane, the Serpent', look: { hull: 0x1e7a5e, trim: 0xd9a441, sail: 0x2b2b30, flag: 0x1e7a5e }, rewards: ['serpent', 'quickmatch'] },
+  { name: 'Barnaby Crowe, the Hangman', look: { hull: 0x16161a, trim: 0xe9e2cf, sail: 0x16161a, flag: 0xe9e2cf }, rewards: ['deadman', 'ironwood'] },
+  { name: 'Cinder Kate Morrow', look: { hull: 0x3a2a26, trim: 0xd9a441, sail: 0xa8281e, flag: 0xd9a441 }, rewards: ['ash', 'longguns'] },
+  { name: 'Mordecai Finch, the Gravedigger', look: { hull: 0x4a4458, trim: 0xcfc9bd, sail: 0xcfc9bd, flag: 0x16161a }, rewards: ['grave', 'stormrig'] },
+];
+// How you stand with the lord of a stretch of water.
+export function lordState(zone) {
+  if (!save.lords[zone.name]) save.lords[zone.name] = { sunk: 0, beaten: false };
+  return save.lords[zone.name];
+}
+export const lordOf = (zone) => LORDS[ZONES.indexOf(zone)];
+export const lordsBeaten = () => ZONES.filter((z) => lordState(z).beaten).length;
+
 // ---- Your standing ------------------------------------------------------------------
 // `wanted` runs from 0 (an honest sailor) to 5. It rises when you fire on merchants or
 // the navy, and falls by one each day or all at once when you pay the fine.
