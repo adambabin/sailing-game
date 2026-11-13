@@ -34,6 +34,10 @@ export function sailPattern(kind, stripe) {
       g.beginPath(); g.arc(i * 32 + (j % 2) * 16, j * 24 + 4, 15, 0, Math.PI); g.lineWidth = 4; g.strokeStyle = g.fillStyle; g.stroke();
     }
   }
+  if (kind === 'waves') {
+    g.lineWidth = 7; g.strokeStyle = g.fillStyle;
+    for (let j = 0; j < 4; j++) { g.beginPath(); for (let x = 0; x <= 128; x += 4) g.lineTo(x, j * 32 + 16 + Math.sin((x / 128) * Math.PI * 4) * 8); g.stroke(); }
+  }
   if (kind === 'sun') {
     g.beginPath(); g.arc(64, 64, 26, 0, 7); g.fill();
     for (let i = 0; i < 12; i++) {

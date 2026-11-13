@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { WORLD } from './islands.js';
+import { hasReward } from './rewards.js';
 
 const white = new THREE.Color(1, 1, 1);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -145,7 +146,7 @@ export function createStorms() {
       const k = at(s.x, s.z);
       st.strain = k > 0.35 && s.sail > SAFE_SAIL && s.anchorDepth < 0.9 && !s.sinking;
       if (!st.strain || s.hull <= FLOOR) return 0;
-      return Math.min(s.hull - FLOOR, dt * STRAIN * k * ((s.sail - SAFE_SAIL) / (1 - SAFE_SAIL)));
+      return Math.min(s.hull - FLOOR, dt * STRAIN * (hasReward('figurehead') ? 0.5 : 1) * k * ((s.sail - SAFE_SAIL) / (1 - SAFE_SAIL)));
     },
   };
 }

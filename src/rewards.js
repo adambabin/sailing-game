@@ -22,6 +22,13 @@ export const REWARDS = {
   marlinblue: { name: 'Marlin-blue hull paint', look: ['hull', 0x1d4e89] },
   scales: { name: 'Fish-scale sail cloth', look: ['pattern', 'scales'] },
   strongline: { name: 'Strong line', detail: 'Your fishing line takes more strain before it snaps', fit: true },
+  // From the sea-life log and the legends (see creatures.js).
+  spyglass: { name: 'Brass spyglass', detail: 'Sea creatures are logged from much further off', fit: true },
+  coralsails: { name: 'Coral sails', look: ['sail', 0xe8825a] },
+  wavecloth: { name: 'Wave-crest sail cloth', look: ['pattern', 'waves'] },
+  krakenink: { name: 'Kraken-ink sails', look: ['sail', 0x3b2350] },
+  serpentjade: { name: 'Serpent-jade trim', look: ['trim', 0x7fd1b9] },
+  figurehead: { name: 'Leviathan figurehead', detail: 'Storms strain her only half as much', fit: true },
   // From tavern work.
   guildtrim: { name: 'Harbour-guild teal trim', look: ['trim', 0x4aa3a0] },
   copper: { name: 'Coppered bottom', detail: 'She answers the wheel more quickly', fit: true },

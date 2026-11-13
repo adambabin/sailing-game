@@ -27,6 +27,8 @@ export const save = {
   jobsTaken: [], // today's offers already accepted, so they are not offered twice
   jobsDone: 0,
   lords: {}, // pirate lords, by the name of their waters: { sunk, beaten }
+  creatures: {}, // sea creatures seen, by kind: how many times
+  legends: {}, // legendary monsters beaten: { kraken: true, ... }
   fishLog: {}, // fish caught, by kind: { n: how many, best: heaviest in kg }
   earned: [], // rewards that cannot be bought (see rewards.js)
   ships: ['sloop'], // kinds of ship you own

@@ -223,6 +223,14 @@ export function createAudio() {
       burst('lowpass', 160 + 500 * near, 0.8 * near, 3.5 + 2 * (1 - near), now + 0.05);
       burst('lowpass', 90, 0.6 * near, 4.5, now + 0.4);
     },
+    // A sea monster's bellow: a deep, rough groan that slides down (and a longer one when it dies).
+    roar(distance = 30, dying = false) {
+      if (!ctx) return;
+      const near = 1 / (1 + distance / 120), now = ctx.currentTime, len = dying ? 3.5 : 1.8;
+      tone('sawtooth', 95, 0.12 * near, 0.2, len, fx, now, 42);
+      tone('sawtooth', 71, 0.1 * near, 0.25, len * 1.1, fx, now + 0.05, 33);
+      burst('lowpass', 420, 0.4 * near, len, now);
+    },
     coin() {
       if (!ctx) return;
       const now = ctx.currentTime;

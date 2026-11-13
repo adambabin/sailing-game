@@ -8,6 +8,7 @@ import { SHIP_TYPES } from './ship.js';
 import { ZONES, wanted, lordsBeaten } from './factions.js';
 import * as jobs from './jobs.js';
 import { FISH } from './fishing.js';
+import { DEEP, CREATURES } from './creatures.js';
 
 const NM = 1852;
 const NEAR_SPAN = 2400; // metres across when zoomed in around the ship
@@ -97,6 +98,20 @@ export function createChart() {
       g.font = `italic ${small ? 8 : 10}px ${serif}`;
       g.fillText(zone.name, X(zone.x), Z(zone.z) + 3);
     }
+
+    // The Deep, where the kraken lives: a dark ring, as the old charts drew it.
+    g.beginPath();
+    g.arc(X(DEEP.x), Z(DEEP.z), DEEP.r * k, 0, 7);
+    g.fillStyle = save.legends.kraken ? 'rgba(40, 60, 90, 0.08)' : 'rgba(30, 40, 70, 0.16)';
+    g.fill();
+    g.setLineDash([2, 3]);
+    g.strokeStyle = 'rgba(30, 40, 70, 0.7)';
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = '#1e2846';
+    g.font = `italic ${small ? 8 : 10}px ${serif}`;
+    g.fillText(DEEP.name, X(DEEP.x), Z(DEEP.z) + 3);
+    if (!small && !save.legends.kraken) { g.font = `italic ${near ? 10 : 8}px ${serif}`; g.fillText('here be monsters', X(DEEP.x), Z(DEEP.z) + 14); }
 
     // Islands you have found are inked in full; ones you have only heard of are a ghost and a name.
     g.imageSmoothingEnabled = true;
@@ -219,6 +234,7 @@ export function createChart() {
       ['Curiosities', `${save.finds.length} of ${ISLANDS.length}`],
       ['Shells', `${save.shells.length} of ${ISLANDS.length * SHELLS_PER_ISLAND}`],
       ['Standing', wanted() >= 1 ? `Wanted (${Math.floor(wanted())} of 5)` : save.piratesSunk ? `Honest sailor, ${save.piratesSunk} ${save.piratesSunk === 1 ? 'pirate' : 'pirates'} sunk` + (save.bountyDue ? `, ${save.bountyDue} coins bounty to collect` : '') : 'Honest sailor'],
+      ['Sea life', `${CREATURES.filter((c) => save.creatures[c.id]).length} of ${CREATURES.length} kinds seen`],
       ['Fish', `${Object.keys(save.fishLog).length} of ${FISH.length} kinds caught`],
       ['Tavern work', `${save.jobsDone} ${save.jobsDone === 1 ? 'job' : 'jobs'} done`],
       ...save.jobs.map((j) => ['Job', jobs.summary(j, ship || { x: 0, z: 0 })]),

@@ -41,6 +41,9 @@ const LORE = [
   'Nights pass quicker than days out here. Something in the rum, I expect.',
   'More canvas, more speed. But a gale with full sail will have your rail in the water.',
   'Prices shift a little every morning. The patient trader checks twice.',
+  'There is a stretch of water west of The Twins we call The Deep. Black as ink, and something lives down there. Arms like masts, they say.',
+  'Old sailors swear a serpent rises in the worst storms, far out where no one can help you. I never believed it. Then I met one who had seen it.',
+  'Watch for spouts on the horizon. Sail close while a whale is up and you will remember it all your life.',
 ];
 
 const POINTS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];

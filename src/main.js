@@ -22,6 +22,7 @@ import * as jobs from './jobs.js';
 import { grant, hasReward } from './rewards.js';
 import { createFishing, FISH, cargoKey, habitat, LOG_REWARDS } from './fishing.js';
 import { createStorms, bearingName, SAFE_SAIL } from './storms.js';
+import { createCreatures, CREATURES, habitat as seaHabitat, LOG_REWARDS as SEA_REWARDS, LEGEND_REWARDS, LEGEND_COINS } from './creatures.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -172,7 +173,9 @@ const targets = [me, ...vessels.list];
 function refreshTargets() {
   targets.length = 0;
   targets.push(me, ...vessels.list);
+  if (creatures && creatures.legend) targets.push(creatures.legend); // a sea monster can be shot at too
 }
+let creatures = null; // made further down, once the scene is ready
 const world = { player: me, eye: camera.position, ashore: false, wanted: false, fleetEnemy: null };
 
 // ---- Your fleet: ships that sail in company with you -------------------------------
@@ -203,6 +206,9 @@ function pickFleetEnemy(dt) {
     const d = Math.hypot(v.x - ship.state.x, v.z - ship.state.z);
     if (hostile && d < bd) { bd = d; best = v; }
   }
+  // With no ship to fight, the fleet turns its guns on a sea monster attacking you.
+  const L = creatures && creatures.legend;
+  if (!best && L && !L.gone && !L.sinking && Math.hypot(L.x - ship.state.x, L.z - ship.state.z) < 650) best = L;
   world.fleetEnemy = shore.state.active ? null : best;
 }
 // Each morning the fleet's crews are paid. If the purse is short, the last ship to join sails away.
@@ -296,7 +302,7 @@ function updateDangers() {
   if (isWanted()) wantedChip.textContent = 'Wanted ' + '★'.repeat(Math.floor(wanted()));
   // Name the nearest ship, and show how she is faring.
   let near = null, nd = 380;
-  if (!shore.state.active) for (const v of vessels.list) { if (v.gone) continue; const d = Math.hypot(v.x - s.x, v.z - s.z); if (d < nd) { nd = d; near = v; } }
+  if (!shore.state.active) for (const v of [...vessels.list, ...(creatures.legend && !creatures.legend.gone ? [creatures.legend] : [])]) { if (v.gone) continue; const d = Math.hypot(v.x - s.x, v.z - s.z); if (d < nd) { nd = d; near = v; } }
   if (near) {
     vPos.set(near.x, near.y + near.top + 6, near.z).project(camera);
     vesselTag.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05;
@@ -689,6 +695,67 @@ function updateLabels() {
   });
 }
 
+// ---- Sea creatures: animals to find and log, and two legends to fight -----------------------
+creatures = createCreatures(waves, {
+  foam: foamAt,
+  ear: camera.position,
+  splash: (d) => audio.splash(d),
+  crunch: (d) => audio.crunch(d),
+  roar: (d, dying) => audio.roar(d, dying),
+  hitShip: (damage) => me.hit(damage),
+  logged: (c, count) => {
+    let text = `New for your sea-life log: ${c.name.toLowerCase().startsWith('the ') ? c.name : (/^[aeiou]/i.test(c.name) ? 'an ' : 'a ') + c.name.toLowerCase()}! That is ${count} of ${CREATURES.length}.`;
+    const reward = SEA_REWARDS[count] ? grant(SEA_REWARDS[count]) : '';
+    if (reward) { applyUpgrades(); text += ` For your log: ${reward.toLowerCase()}.`; }
+    audio.bell();
+    showToast(text, 6);
+  },
+  notice: (kind, d) => {
+    const w = ship.state;
+    if (kind === 'spotted') showToast(d.blow ? `Thar she blows! A spout to the ${bearingName(w, d.at)}.` : `Something broke the surface to the ${bearingName(w, d.at)}.`, 5);
+    else if (kind === 'deep') showToast(save.legends.kraken ? 'You are over The Deep. Nothing stirs down there now.' : 'You are over The Deep. The water is black and very still.', 5);
+    else if (kind === 'legend') {
+      refreshTargets();
+      showToast(d.legend.id === 'kraken' ? 'The sea heaves under you. Great arms rise on every side: the Kraken!' : 'A great head rears out of the storm: the Sea Serpent!', 6);
+    } else if (kind === 'legendLeft') showToast(`${d.legend.name} sinks back into the depths.`, 4);
+    else if (kind === 'legendBeaten') {
+      const id = d.legend.id, coins = LEGEND_COINS[id];
+      save.coins += coins;
+      const won = [grant(LEGEND_REWARDS[id])];
+      if (save.legends.kraken && save.legends.serpent) won.push(grant('figurehead'));
+      applyUpgrades();
+      persist();
+      audio.coin();
+      const extra = won.filter(Boolean);
+      showToast(`${d.legend.name} is beaten! Its hoard is worth ${coins} coins.` + (extra.length ? ` Yours too: ${extra.join(', ').toLowerCase()}.` : ''), 9);
+    }
+  },
+});
+scene.add(creatures.group);
+function updateCreatures(dt, time) {
+  const ashore = shore.state.active;
+  const r = creatures.update(dt, time, ship.state, { atSea: !ashore && !ship.state.sinking, env, storm: env.storm, stormId: storms.current });
+  if (r === 'legendGone') refreshTargets();
+  // Dolphins playing at the bow count for the log too.
+  const pod = wildlife.pod, dol = wildlife.dolphins[0];
+  if (pod.active && !ashore && !save.creatures.dolphin && Math.hypot(dol.x - ship.state.x, dol.z - ship.state.z) < 60) creatures.log('dolphin');
+}
+// The sea-life log: every creature, with where it is found.
+function openSeaLog() {
+  const seen = CREATURES.filter((c) => save.creatures[c.id]).length;
+  const next = Object.keys(SEA_REWARDS).map(Number).find((n) => n > seen);
+  const rows = CREATURES.map((c) => {
+    const n = save.creatures[c.id];
+    return mk('div', { className: 'trade-row' }, mk('div', { className: 'ship-info' },
+      mk('b', { style: n ? '' : 'opacity:0.55' }, c.name + (c.legend && save.legends[c.id] ? ' (beaten)' : '')),
+      mk('div', { className: 'muted' }, (n ? `${c.text} ` : 'Not yet seen. ') + 'Found ' + seaHabitat(c) + '.')));
+  });
+  places.card('Sea-life log',
+    mk('p', { className: 'muted' }, `${seen} of ${CREATURES.length} kinds seen. Sail close while a creature is at the surface to log it.` + (next ? ` See ${next - seen} more for something that cannot be bought.` : '')),
+    ...rows);
+}
+document.getElementById('chart-sealog').addEventListener('click', () => { if (chart.isOpen) toggleChart(); openSeaLog(); });
+
 // ---- Fishing: the hook button (and F) casts, strikes, and is held down to reel in --------
 const fishBtn = document.getElementById('btn-fish'), fishLabel = document.getElementById('fish-label');
 const reelEl = document.getElementById('reel'), reelTension = document.getElementById('reel-tension'), reelLanded = document.getElementById('reel-landed'), reelTip = document.getElementById('reel-tip');
@@ -900,7 +967,13 @@ function bringStorm() {
   storms.current.age = 60; // already full grown
   showToast(`A storm is building to the ${bearingName(w, storms.current)}.`);
 }
-for (const [id, run] of [['pause-ship', tryNextShip], ['pause-time', skipTime], ['pause-weather', cycleWeather], ['pause-storm', bringStorm]]) {
+function showCreature() {
+  const kinds = CREATURES.filter((c) => c.odds);
+  const c = kinds[Math.floor(Math.random() * kinds.length)];
+  creatures.spawnAhead(c.id, ship.state, 160);
+  showToast(`A ${c.name.toLowerCase()} is just ahead.`);
+}
+for (const [id, run] of [['pause-creature', showCreature], ['pause-ship', tryNextShip], ['pause-time', skipTime], ['pause-weather', cycleWeather], ['pause-storm', bringStorm]]) {
   document.getElementById(id).addEventListener('click', () => { run(); pauseNote.textContent = toast.textContent + (id === 'pause-time' ? ' when you resume' : ''); });
 }
 document.getElementById('help-go').addEventListener('click', closeHelp);
@@ -1030,6 +1103,7 @@ function updateHud(dt) {
   let text = '', warn = false;
   if (shore.state.active) text = !action && !places.isOpen && shore.state.onWood && shore.state.island.portInfo ? 'Walk up into the village to find the tavern, shipwright and market.' : '';
   else if (s.sinking) { text = 'She is lost. Abandon ship!'; warn = true; }
+  else if (creatures.legend && !creatures.legend.gone && !creatures.legend.sinking) { text = `${creatures.legend.name}! Turn a broadside to it and fire. Sail 700 m clear to escape.`; warn = true; }
   else if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
   else if (storms.state.strain) { text = `Storm! Too much sail: she is being strained. Take in sail to ${Math.round(SAFE_SAIL * 100)}% or less.`; warn = true; }
   else if (storms.state.level > 0.35 && s.anchorDepth < 0.9) text = 'Riding out the storm under short sail. She is safe like this.';
@@ -1120,6 +1194,7 @@ function frame() {
   updateCamera(dt, time, first);
   first = false;
   wildlife.update(dt, time, ship.state, env, camera);
+  updateCreatures(dt, time);
   updateIslands(time, wind);
   world.ashore = ashore;
   world.wanted = isWanted();
@@ -1134,7 +1209,7 @@ function frame() {
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
     btn.style.setProperty('--load', (me.reload[key] / me.reloadTime).toFixed(3));
-    btn.classList.toggle('aim', me.reload[key] <= 0 && vessels.list.some((v) => !v.sinking && !v.gone && inArc(me, side, v)));
+    btn.classList.toggle('aim', me.reload[key] <= 0 && [...vessels.list, ...(creatures.legend ? [creatures.legend] : [])].some((v) => !v.sinking && !v.gone && inArc(me, side, v)));
   }
   hullFill.style.width = Math.round(ship.state.hull * 100) + '%';
   hullFill.className = ship.state.hull < 0.3 ? 'grave' : ship.state.hull < 0.6 ? 'hurt' : '';
@@ -1158,13 +1233,13 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, storms, bringStorm, fishing, pressFish, landFish, openFishLog,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, creatures, openSeaLog, refreshTargets, storms, bringStorm, fishing, pressFish, landFish, openFishLog,
   set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   get paused() { return paused; }, setPaused,
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); pickFleetEnemy(1 / 60); updateCreatures(1 / 60, time); }
   },
 };
