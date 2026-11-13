@@ -16,15 +16,16 @@ Play it: https://adambabin.github.io/sailing-game/
 | Drop / weigh anchor | `Space` | ⚓ button |
 | Look around (turn your head at the wheel) | Drag with the mouse | Drag with a finger |
 | Zoom | Scroll wheel | Pinch |
-| Skip ahead three hours | `T` | Time button |
-| Change the weather | `R` | Weather button |
+| Skip ahead three hours (testing) | `T` | In the pause menu |
+| Change the weather (testing) | `R` | In the pause menu |
 | Go ashore / visit a place / row back | `E` | The yellow button |
 | Map and logbook | `M` | Map button |
 | Compass strip | `C` | Compass button |
 | Fire the port / starboard guns | `1` / `2` | The two Fire buttons |
 | Stand at the wheel / view from astern | `V` | View button |
-| Try the next ship (temporary, for testing) | `B` | Ship button |
-| Sound / no music / muted | `N` | Sound button |
+| Try the next ship (testing) | `B` | In the pause menu |
+| Sound / no music / muted | `N` | In the pause menu |
+| Start a new voyage (erases progress, asks twice) | | Reset button |
 | Pause | `Esc` | II button |
 
 The dial in the corner shows where the wind is coming from relative to your

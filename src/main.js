@@ -506,7 +506,6 @@ function tryNextShip() {
   if (!shore.state.active) cam.dist = ship.type.cam.dist;
   showToast('Trying the ' + ship.type.name.toLowerCase());
 }
-document.getElementById('tool-ship').addEventListener('click', tryNextShip);
 
 // Swap between the view from astern and the view from the wheel.
 const viewBtn = document.getElementById('tool-view');
@@ -518,18 +517,13 @@ function toggleView() {
   showToast(cam.deck ? 'At the wheel' : 'View from astern');
 }
 viewBtn.addEventListener('click', toggleView);
-document.getElementById('tool-time').addEventListener('click', skipTime);
-document.getElementById('tool-weather').addEventListener('click', cycleWeather);
 
 // ---- Sound ------------------------------------------------------------------------
 const audio = createAudio();
-const soundBtn = document.getElementById('tool-sound');
-soundBtn.textContent = MODE_LABELS[audio.mode];
 function cycleSound() {
   audio.start();
-  soundBtn.textContent = MODE_LABELS[audio.cycleMode()];
+  showToast('Sound: ' + MODE_LABELS[audio.cycleMode()]);
 }
-soundBtn.addEventListener('click', cycleSound);
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
 document.addEventListener('visibilitychange', () => {
   audio.pause(document.hidden || paused);
@@ -786,6 +780,7 @@ function setPaused(on) {
     dropStick();
     saveGame();
     pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode];
+    pauseNote.textContent = '';
   }
 }
 document.getElementById('pausebtn').addEventListener('click', () => setPaused(true));
@@ -793,21 +788,31 @@ document.getElementById('pause-resume').addEventListener('click', () => setPause
 document.getElementById('pause-map').addEventListener('click', () => { setPaused(false); if (!chart.isOpen) toggleChart(); });
 document.getElementById('pause-help').addEventListener('click', () => { pauseEl.hidden = true; help.hidden = false; });
 pauseSound.addEventListener('click', () => { cycleSound(); audio.pause(true); pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode]; });
+// The testing tools live here too. Each says what it did on the line underneath.
+const pauseNote = document.getElementById('pause-note');
+for (const [id, run] of [['pause-ship', tryNextShip], ['pause-time', skipTime], ['pause-weather', cycleWeather]]) {
+  document.getElementById(id).addEventListener('click', () => { run(); pauseNote.textContent = toast.textContent + (id === 'pause-time' ? ' when you resume' : ''); });
+}
 document.getElementById('help-go').addEventListener('click', closeHelp);
 if (save.distance > 100) document.getElementById('help-go').textContent = 'Continue your voyage';
 
 // Starting over wipes saved progress; the button asks twice because browsers' own pop-ups are not available here.
-const resetBtn = document.getElementById('new-voyage');
-resetBtn.addEventListener('click', () => {
-  if (resetBtn.dataset.sure) {
-    wipe();
-    location.reload();
-  } else {
-    resetBtn.dataset.sure = '1';
-    resetBtn.textContent = 'Really start over? Coins, cargo and chart will be lost';
-    setTimeout(() => { delete resetBtn.dataset.sure; resetBtn.textContent = 'Start a new voyage'; }, 5000);
-  }
-});
+// There are two such buttons: Reset in the top bar, and "Start a new voyage" in the logbook.
+function resetButton(btn, sureText) {
+  const idle = btn.textContent;
+  btn.addEventListener('click', () => {
+    if (btn.dataset.sure) {
+      wipe();
+      location.reload();
+    } else {
+      btn.dataset.sure = '1';
+      btn.textContent = sureText;
+      setTimeout(() => { delete btn.dataset.sure; btn.textContent = idle; }, 5000);
+    }
+  });
+}
+resetButton(document.getElementById('new-voyage'), 'Really start over? Coins, cargo and chart will be lost');
+resetButton(document.getElementById('tool-reset'), 'Erase everything?');
 document.getElementById('helpbtn').addEventListener('click', () => { help.hidden = !help.hidden; });
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom

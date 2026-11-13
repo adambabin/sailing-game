@@ -132,6 +132,10 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 #pause h1 { font-family: var(--display); font-weight: 400; font-size: 34px; margin: 0; }
 #pause p { margin: 0 0 6px; color: var(--muted); }
 #pause button { padding: 11px 20px; font-size: 15px; }
+#pause h2 { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
+#pause .card { max-height: 100%; overflow: auto; }
+#pause-note { min-height: 1.3em; margin: 0 !important; }
+#tool-reset[data-sure] { background: var(--coral); color: var(--ink); }
 @media (max-width: 560px) {
   #gauges { gap: 10px; padding: 7px 10px; }
   .gauge { min-width: 34px; }
@@ -168,10 +172,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
       <button id="tool-chart" aria-expanded="false">Map</button>
       <button id="tool-compass" aria-expanded="false">Compass</button>
       <button id="tool-view" aria-expanded="false">View</button>
-      <button id="tool-ship">Ship</button>
-      <button id="tool-time">Time</button>
-      <button id="tool-weather">Weather</button>
-      <button id="tool-sound">Sound</button>
+      <button id="tool-reset">Reset</button>
     </div>
     <button id="pausebtn" class="panel" aria-label="Pause">II</button>
     <button id="helpbtn" class="panel" aria-label="How to sail">?</button>
@@ -238,14 +239,13 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
       <dt>Stick, or W / S</dt><dd>Raise and lower the sails</dd>
       <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
       <dt>Drag, scroll</dt><dd>Look around and zoom</dd>
-      <dt>T / R</dt><dd>Skip ahead in time / change the weather</dd>
       <dt>E</dt><dd>Go ashore, visit a place, row back</dd>
       <dt>M</dt><dd>Map and logbook</dd>
       <dt>C</dt><dd>Compass</dd>
       <dt>1 / 2</dt><dd>Fire the port / starboard guns</dd>
       <dt>V</dt><dd>Stand at the wheel, or look from astern</dd>
-      <dt>N</dt><dd>Sound, no music, or muted</dd>
-      <dt>Esc or II</dt><dd>Pause</dd>
+      <dt>Esc or II</dt><dd>Pause: sound and testing tools are in that menu</dd>
+      <dt>Reset</dt><dd>Start a new voyage (asks twice)</dd>
     </dl>
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
     <p>Pirates keep to the four red circles on your chart. Stay out of them and the sea is peaceful.</p>
@@ -262,6 +262,11 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
     <button id="pause-map" class="close">Map and logbook</button>
     <button id="pause-help" class="close">Controls</button>
     <button id="pause-sound" class="close">Sound</button>
+    <h2>Testing tools</h2>
+    <button id="pause-ship" class="close">Try the next ship</button>
+    <button id="pause-time" class="close">Skip three hours</button>
+    <button id="pause-weather" class="close">Change the weather</button>
+    <p id="pause-note"></p>
   </div>
 </div>
 
