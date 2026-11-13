@@ -113,7 +113,7 @@ Stages, in order. Each is reviewed on the private link before going to `main`:
 
 After the second plan the owner asked for a bigger world (about four times the area, 33 islands in seven regions, with atolls, volcanoes, cliffs, sandbars and reefs), a bigger chart on M, and a compass strip on C. Done and approved.
 
-The second plan is complete. The owner then asked for a reason to explore the bigger sea and chose: tavern jobs and pirate lords; name and direction only for guidance; fighting always optional; rewards of unique ship looks and earned ship improvements (see Tavern jobs, Pirate lords and Earned rewards above). Built and awaiting their review on the private link; not yet on `main`. Nothing further is queued after that; ask the owner what they want next. Balance (enemy strength, loot and bounty amounts, ship prices against the new income) is a first guess that only automated runs have exercised, so expect to retune from their play-testing.
+The second plan is complete. The owner then asked for a reason to explore the bigger sea and chose: tavern jobs and pirate lords; name and direction only for guidance; fighting always optional; rewards of unique ship looks and earned ship improvements (see Tavern jobs, Pirate lords and Earned rewards above). Done and approved. Nothing further is queued; ask the owner what they want next. Balance (enemy strength, loot and bounty amounts, ship prices against the new income) is a first guess that only automated runs have exercised, so expect to retune from their play-testing.
 
 Still open from the first plan: fixing whatever the owner reports from play-testing, and removing the temporary Time, Weather and Ship buttons once they say testing is over.
 
