@@ -8,6 +8,7 @@ import { MAP_PRICE, MAX_MAPS } from './treasure.js';
 import { isWanted, wanted, fine, payFine, priceUp, priceDown, ZONES, LORD_AFTER, LORD_BOUNTY, lordState, lordOf } from './factions.js';
 import * as jobs from './jobs.js';
 import { REWARDS, EARNED_LOOKS, hasReward } from './rewards.js';
+import { FISH, cargoKey, fishPrice } from './fishing.js';
 
 const PAINT_COST = 25, CLOTH_COST = 60;
 const PART_LABELS = { hull: 'Hull', trim: 'Trim', sail: 'Sails', flag: 'Flag', pattern: 'Sail cloth' };
@@ -120,7 +121,7 @@ export function createPlaces(game) {
     const inHand = save.jobs.map((job, i) => {
       const lost = jobs.freightLost(job), ready = !lost && jobs.canFinish(job, isl);
       return h('div', { className: 'trade-row' },
-        h('div', { className: 'ship-info' }, h('b', {}, job.title), h('div', { className: 'muted' }, lost ? 'The freight is lost. There is nothing to deliver.' : ready ? `Done. ${job.pay} coins are waiting for you.` : jobs.isDone(job) && job.to !== isl.name ? `Not here: ${job.to} is ${jobs.whereabouts(isl, jobs.target(job))}.` : `Still to do. It lies ${jobs.whereabouts(isl, jobs.target(job))}.`)),
+        h('div', { className: 'ship-info' }, h('b', {}, job.title), h('div', { className: 'muted' }, lost ? 'The freight is lost. There is nothing to deliver.' : ready ? `Done. ${job.pay} coins are waiting for you.` : jobs.status(job, isl))),
         h('div', { className: 'trade-buttons' },
           ...(ready ? [h('button', { id: 'job-done-' + i, onclick: done(job) }, `Collect ${job.pay}`)] : []),
           ...(ready ? [] : [h('button', { id: 'job-drop-' + i, onclick: () => { jobs.abandon(job); tavern(isl); } }, 'Give it up')])));
@@ -186,7 +187,18 @@ export function createPlaces(game) {
     const notice = !isWanted() ? [] : [h('div', { className: 'trade-row warn' },
       h('div', { className: 'ship-info' }, h('b', {}, 'You are a wanted captain'), h('div', { className: 'muted' }, `${keeper(isl, 'market')} will deal with you, at a price. The navy will not. It fades by a star each day, or the harbour will take a fine.`)),
       h('button', { id: 'pay-fine', disabled: save.coins < fine(), onclick: () => { payFine(); game.audio.coin(); game.toast('Fine paid. You are an honest sailor again.'); market(isl); } }, `Pay ${fine()} coins`))];
-    body.replaceChildren(h('p', { className: 'muted' }, `${keeper(isl, 'market')} keeps the stall. Prices are per crate, in coins.`), purse(), ...notice, ...rows);
+    // Fish from your hold. The market buys them but does not sell them: you catch your own.
+    const fishRows = FISH.filter((f) => save.cargo[cargoKey(f)]).map((f) => {
+      const have = save.cargo[cargoKey(f)], price = Math.max(1, Math.floor(fishPrice(isl.name, f, day) * priceDown()));
+      const sell = (n) => () => { save.cargo[cargoKey(f)] = have - n; if (!save.cargo[cargoKey(f)]) delete save.cargo[cargoKey(f)]; save.coins += n * price; persist(); game.audio.coin(); market(isl); };
+      return h('div', { className: 'trade-row' },
+        h('div', {}, h('b', {}, f.name), h('span', { className: 'muted' }, ` you have ${have}`)),
+        h('div', { className: 'trade-buttons' },
+          h('button', { id: 'sellfish-' + f.id, onclick: sell(1) }, `Sell ${price}`),
+          h('button', { id: 'sellallfish-' + f.id, disabled: have < 2, onclick: sell(have) }, 'All')));
+    });
+    const fishPart = fishRows.length ? [h('h3', {}, 'Fish'), h('p', { className: 'muted' }, 'Every market pays a different price for each kind.'), ...fishRows] : [];
+    body.replaceChildren(h('p', { className: 'muted' }, `${keeper(isl, 'market')} keeps the stall. Prices are per crate, in coins.`), purse(), ...notice, ...rows, ...fishPart);
   }
 
   function shipwright(isl) {

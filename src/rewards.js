@@ -17,6 +17,11 @@ export const REWARDS = {
   grave: { name: 'Gravedigger’s chequered sail cloth', look: ['pattern', 'checks'] },
   stormrig: { name: 'Storm rig', detail: 'A little faster in any wind', fit: true },
   admiral: { name: 'The rising-sun sail cloth', look: ['pattern', 'sun'] },
+  // From the fish log (see LOG_REWARDS in fishing.js).
+  tackle: { name: 'Fine tackle', detail: 'Fish bite sooner', fit: true },
+  marlinblue: { name: 'Marlin-blue hull paint', look: ['hull', 0x1d4e89] },
+  scales: { name: 'Fish-scale sail cloth', look: ['pattern', 'scales'] },
+  strongline: { name: 'Strong line', detail: 'Your fishing line takes more strain before it snaps', fit: true },
   // From tavern work.
   guildtrim: { name: 'Harbour-guild teal trim', look: ['trim', 0x4aa3a0] },
   copper: { name: 'Coppered bottom', detail: 'She answers the wheel more quickly', fit: true },

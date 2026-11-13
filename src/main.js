@@ -20,6 +20,7 @@ import { cargoCount } from './save.js';
 import { ZONES, zoneAt, addWanted, coolOff, isWanted, wanted, LORD_AFTER, lordState, lordOf, lordsBeaten } from './factions.js';
 import * as jobs from './jobs.js';
 import { grant, hasReward } from './rewards.js';
+import { createFishing, FISH, cargoKey, habitat, LOG_REWARDS } from './fishing.js';
 import { createPlaces, ALL_LOOK_VALUES } from './places.js';
 import { createChart } from './chart.js';
 import { save, persist, wipe } from './save.js';
@@ -369,6 +370,8 @@ function placeCrew(time) {
 const captain = buildPerson({ shirt: 0xf3efe2, trousers: 0x2c3f63, skin: 0xd9a47a, hat: 'straw', sash: 0xd9453c, scale: 1.1 });
 ship.root.add(captain.group);
 applyPaint(ship.root);
+const fishing = createFishing(waves);
+scene.add(fishing.group);
 const people = createPeople();
 const finds = createFinds();
 const treasure = createTreasure();
@@ -609,6 +612,7 @@ function lookAt(f) {
 function findAction() {
   const s = ship.state;
   if (places.isOpen) return null;
+  if (fishing.state.state === 'bite' || fishing.state.state === 'reeling') return null; // one thing at a time: land the fish first
   if (shore.state.active) {
     const w = shore.state;
     for (const p of w.island.portInfo ? w.island.portInfo.places : []) {
@@ -660,6 +664,80 @@ function updateLabels() {
     elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
   });
 }
+
+// ---- Fishing: the hook button (and F) casts, strikes, and is held down to reel in --------
+const fishBtn = document.getElementById('btn-fish'), fishLabel = document.getElementById('fish-label');
+const reelEl = document.getElementById('reel'), reelTension = document.getElementById('reel-tension'), reelLanded = document.getElementById('reel-landed'), reelTip = document.getElementById('reel-tip');
+let fishHeld = false;
+function pressFish() {
+  if (shore.state.active || ship.state.sinking || paused || !help.hidden) return;
+  if (fishing.state.state === 'idle' && Math.abs(ship.state.speed) > 2.4) { showToast('Too fast to fish. Lower sail or drop anchor.'); return; }
+  const r = fishing.press(ship, env);
+  if (r === 'cast') { audio.splash(14); showToast('Line out. Wait for a bite.'); }
+  else if (r === 'in') showToast('Line in.');
+  else if (r === 'strike') { audio.splash(6); showToast('Fish on! Hold to reel in. Let go when it runs.', 4); }
+}
+fishBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); fishBtn.setPointerCapture(e.pointerId); fishHeld = true; pressFish(); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fishBtn.addEventListener(ev, () => (fishHeld = false));
+fishBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+const FISH_EVENTS = {
+  bite: 'A bite! Strike now!',
+  missed: 'It took the bait and was gone.',
+  snapped: 'Snap! Too much strain on the line.',
+  shook: 'The line went slack and it shook the hook.',
+  tooFast: 'Line in: she is going too fast to fish.',
+};
+function updateFishing(dt, time) {
+  const ev = fishing.update(dt, time, ship, env, fishHeld, !shore.state.active && !ship.state.sinking);
+  if (ev === 'caught') landFish();
+  else if (ev) {
+    showToast(FISH_EVENTS[ev], ev === 'bite' ? 1.6 : 3.2);
+    if (ev === 'bite') { audio.splash(8); foamAt(fishing.state.fx, fishing.state.fz, 1.1); }
+  }
+  const f = fishing.state;
+  const label = f.state === 'idle' ? 'Fish' : f.state === 'waiting' ? 'Line in' : f.state === 'bite' ? 'Strike!' : 'Reel';
+  if (fishLabel.textContent !== label) fishLabel.textContent = label;
+  fishBtn.classList.toggle('aim', f.state === 'bite');
+  fishBtn.setAttribute('aria-pressed', String(f.state !== 'idle'));
+  fishBtn.classList.toggle('held', f.state === 'reeling' && fishHeld);
+  reelEl.hidden = f.state !== 'reeling';
+  if (f.state === 'reeling') {
+    reelTension.style.width = Math.min(100, f.tension * 100).toFixed(1) + '%';
+    reelTension.className = f.tension > 0.82 ? 'danger' : f.tension > 0.6 ? 'strain' : '';
+    reelLanded.style.width = Math.min(100, f.landed * 100).toFixed(1) + '%';
+    reelTip.textContent = f.surge > 0 ? 'It is running! Ease off.' : f.tension < 0.1 ? 'Slack line: reel in or it will get away.' : 'Hold to reel. Let go when it runs.';
+  }
+}
+function landFish() {
+  const r = fishing.land(), key = cargoKey(r.fish), name = r.fish.name.toLowerCase();
+  audio.splash(4);
+  audio.coin();
+  let text = `A ${r.kg} kg ${name}` + (r.best ? ', your biggest yet' : '') + '.';
+  if (cargoCount() < save.hold) save.cargo[key] = (save.cargo[key] || 0) + 1;
+  else text += ' No room in the hold, so you let it go.';
+  if (r.newKind) {
+    text = `New for your fish log: ${text} That is ${r.kinds} of ${FISH.length} kinds.`;
+    const reward = LOG_REWARDS[r.kinds] ? grant(LOG_REWARDS[r.kinds]) : '';
+    if (reward) { applyUpgrades(); text += ` For your log: ${reward.toLowerCase()}.`; }
+  }
+  persist();
+  showToast(text, r.newKind ? 7 : 4);
+}
+// The fish log: every kind, with where it bites, so the gaps tell you where to try next.
+function openFishLog() {
+  const caught = FISH.filter((f) => save.fishLog[f.id]).length;
+  const next = Object.keys(LOG_REWARDS).map(Number).find((n) => n > caught);
+  const rows = FISH.map((f) => {
+    const e = save.fishLog[f.id];
+    return mk('div', { className: 'trade-row' }, mk('div', { className: 'ship-info' },
+      mk('b', { style: e ? '' : 'opacity:0.55' }, f.name),
+      mk('div', { className: 'muted' }, (e ? `${e.n} caught, biggest ${e.best} kg. ` : 'Not yet caught. ') + 'Bites ' + habitat(f) + '.')));
+  });
+  places.card('Fish log',
+    mk('p', { className: 'muted' }, `${caught} of ${FISH.length} kinds caught.` + (next ? ` Catch ${next - caught} more ${next - caught === 1 ? 'kind' : 'kinds'} for something that cannot be bought.` : ' Every kind there is.')),
+    ...rows);
+}
+document.getElementById('chart-fishlog').addEventListener('click', () => { if (chart.isOpen) toggleChart(); openFishLog(); });
 
 // ---- The compass: a strip across the top that slides as you turn --------------------
 const compassEl = document.getElementById('compass'), compassBand = document.getElementById('compass-band'), compassBtn = document.getElementById('tool-compass');
@@ -724,6 +802,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'Digit2' && !e.repeat) fire(-1);
   else if (e.code === 'KeyB') tryNextShip();
   else if (e.code === 'KeyE' && !e.repeat) doAction();
+  else if (e.code === 'KeyF' && !e.repeat) { fishHeld = true; pressFish(); }
   else if (e.code === 'Enter' || e.code === 'Escape') {
     if (!help.hidden) closeHelp();
     else if (places.isOpen) places.close();
@@ -732,8 +811,8 @@ window.addEventListener('keydown', (e) => {
     else setPaused(true); // Escape with nothing open: the pause menu
   }
 });
-window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; });
-window.addEventListener('blur', () => { for (const k in held) held[k] = false; dropStick(); });
+window.addEventListener('keyup', (e) => { if (KEYS[e.code]) held[KEYS[e.code]] = false; if (e.code === 'KeyF') fishHeld = false; });
+window.addEventListener('blur', () => { for (const k in held) held[k] = false; fishHeld = false; dropStick(); });
 // The joystick. Its position is a push from -1 to 1 each way; the keys count as a full push.
 const stick = { x: 0, y: 0 };
 const stickEl = document.getElementById('stick'), knob = document.getElementById('stick-knob');
@@ -777,6 +856,7 @@ function setPaused(on) {
   audio.pause(on);
   if (on) {
     for (const k in held) held[k] = false;
+    fishHeld = false;
     dropStick();
     saveGame();
     pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode];
@@ -921,6 +1001,7 @@ function updateHud(dt) {
   if (shore.state.active) text = !action && !places.isOpen && shore.state.onWood && shore.state.island.portInfo ? 'Walk up into the village to find the tavern, shipwright and market.' : '';
   else if (s.sinking) { text = 'She is lost. Abandon ship!'; warn = true; }
   else if (s.aground) { text = 'Shallow water. Steer back out to sea.'; warn = true; }
+  else if (fishing.active && fishing.state.state !== 'idle' && Math.abs(s.speed) > 1.6) { text = 'Going too fast to fish. Lower sail or the line comes in.'; warn = true; }
   else if (s.anchorDepth > 0.9) text = action ? '' : s.sail > 0.15 ? 'At anchor. Weigh anchor to get under way.' : 'Riding at anchor.';
   else if ((portNearby || beachNearby) && s.speed < 6) text = 'Drop anchor here to go ashore at ' + (portNearby || beachNearby).name + '.';
   else if (s.inIrons) { text = 'Pointing into the wind. Turn away until the sails fill.'; warn = true; }
@@ -1016,6 +1097,7 @@ function frame() {
   updateDangers();
   listenForBattle(dt);
   placeCrew(time);
+  updateFishing(dt, time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
     btn.style.setProperty('--load', (me.reload[key] / me.reloadTime).toFixed(3));
@@ -1043,7 +1125,8 @@ frame();
 
 // Handy for testing from the browser console.
 window.game = {
-  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown,
+  ship, wind, cam, env, audio, shore, places, save, wildlife, people, finds, treasure, camera, stick, captain, combat, vessels, me, fire, world, loot, joinFleet, boardPrize, payWages, jobs, summonLord, pirateDown, fishing, pressFish, landFish, openFishLog,
+  set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
   get paused() { return paused; }, setPaused,

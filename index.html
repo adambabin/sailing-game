@@ -82,7 +82,19 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 .treasure-map { display: block; width: 100%; max-width: 280px; aspect-ratio: 1; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
 #action { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 3; max-width: calc(100vw - 300px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); }
 .place-label { position: fixed; top: 0; left: 0; padding: 3px 10px; border-radius: 7px; background: var(--panel); border: 1px solid var(--line); font-family: var(--display); font-size: 17px; pointer-events: none; white-space: nowrap; }
-.ashore #btn-anchor, .ashore #dial, .ashore .fire { display: none; }
+.ashore #btn-anchor, .ashore #dial, .ashore .fire, .ashore #btn-fish { display: none; }
+.pad #btn-fish.aim { border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass); background: var(--brass); color: var(--ink); }
+.pad #btn-fish.aim small { color: var(--ink); }
+#btn-fish, #btn-fish * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+#reel { position: fixed; right: var(--gap-r); bottom: calc(90px + env(safe-area-inset-bottom, 0px)); width: 210px; padding: 8px 12px; z-index: 3; pointer-events: none; }
+.reel-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.reel-row small { width: 30px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.reel-bar { position: relative; flex: 1; height: 10px; border-radius: 5px; background: rgba(246, 236, 210, 0.15); overflow: hidden; }
+.reel-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--good); border-radius: 5px; }
+.reel-bar i.strain { background: var(--brass); }
+.reel-bar i.danger { background: var(--coral); }
+.reel-bar b { position: absolute; left: 82%; top: 0; bottom: 0; width: 2px; background: var(--coral); }
+#reel-tip { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
 #vessel-tag { font-family: var(--body); font-size: 12px; font-weight: 700; }
 #vessel-tag.foe { border-color: var(--coral); color: var(--coral); }
 #chips { position: fixed; top: calc(70px + env(safe-area-inset-top, 0px)); left: var(--gap-l); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
@@ -148,7 +160,11 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
   #compass { top: calc(112px + env(safe-area-inset-top, 0px)); left: var(--gap-l); transform: none; width: calc(100vw - 170px); }
   body.compass-on #chips { top: calc(154px + env(safe-area-inset-top, 0px)); }
   body.compass-on #toast { top: calc(200px + env(safe-area-inset-top, 0px)); }
-  #action { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
+  #action { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
+  /* Four round buttons do not fit beside the joystick on a phone, so they sit two by two. */
+  #pad-right { display: grid; grid-template-columns: 60px 60px; gap: 10px; }
+  #hint { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
+  #reel { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); }
   .sheet { max-height: calc(100% - 40px); }
   #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
 }
@@ -199,6 +215,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
     <canvas id="chart-canvas" aria-label="Sea chart of the islands you have found"></canvas>
     <div id="chart-side">
       <div id="chart-maps" class="trade-buttons"></div>
+      <div class="trade-buttons" style="margin-bottom:12px"><button id="chart-fishlog" class="close">Fish log</button></div>
       <dl id="chart-log"></dl>
       <button id="new-voyage" class="close">Start a new voyage</button>
     </div>
@@ -218,6 +235,11 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 </div>
 
 <div id="toast" class="panel"></div>
+<div id="reel" class="panel" hidden>
+  <div class="reel-row"><small>Line</small><div class="reel-bar"><i id="reel-tension"></i><b></b></div></div>
+  <div class="reel-row"><small>Fish</small><div class="reel-bar"><i id="reel-landed"></i></div></div>
+  <p id="reel-tip">Hold to reel. Let go when it runs.</p>
+</div>
 <div id="hint" class="panel"></div>
 
 <div id="stick" class="panel" role="group" aria-label="Joystick. On the ship: left and right steer, up and down set the sails. Ashore: walk in any direction.">
@@ -227,6 +249,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 <div id="pad-right" class="pad">
   <button id="btn-fire-port" class="panel fire" aria-label="Fire the port (left) guns"><span>&#9664;<small>Fire</small></span></button>
   <button id="btn-fire-stbd" class="panel fire" aria-label="Fire the starboard (right) guns"><span>&#9654;<small>Fire</small></span></button>
+  <button id="btn-fish" class="panel" aria-pressed="false" aria-label="Fish: cast, strike, and hold to reel in"><span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M14 3v11a5 5 0 0 1-10 0v-2l3 3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14" cy="3" r="1.6" fill="currentColor"/></svg><small id="fish-label">Fish</small></span></button>
   <button id="btn-anchor" class="panel" aria-pressed="false" aria-label="Drop or weigh anchor"><span>&#9875;<small>Anchor</small></span></button>
 </div>
 
@@ -243,6 +266,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
       <dt>M</dt><dd>Map and logbook</dd>
       <dt>C</dt><dd>Compass</dd>
       <dt>1 / 2</dt><dd>Fire the port / starboard guns</dd>
+      <dt>F or hook</dt><dd>Fish: cast, strike when it bites, hold to reel in</dd>
       <dt>V</dt><dd>Stand at the wheel, or look from astern</dd>
       <dt>Esc or II</dt><dd>Pause: sound and testing tools are in that menu</dd>
       <dt>Reset</dt><dd>Start a new voyage (asks twice)</dd>

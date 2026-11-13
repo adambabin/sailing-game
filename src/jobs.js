@@ -6,6 +6,7 @@ import { save, persist, cargoCount } from './save.js';
 import { ISLANDS } from './islands.js';
 import { ZONES } from './factions.js';
 import { grant, JOB_REWARDS } from './rewards.js';
+import { FISH, fishById, cargoKey, habitat } from './fishing.js';
 
 export const MAX_JOBS = 3;
 
@@ -55,11 +56,15 @@ export function offers(isl, day) {
   // 3. Something different: a pirate to hunt, a curiosity to report on, or an island to chart.
   {
     const unseen = ISLANDS.filter((i) => !save.finds.includes(i.name) && i !== isl), unknown = ISLANDS.filter((i) => !save.discovered.includes(i.name));
-    const kinds = ['hunt', ...(unseen.length ? ['collector'] : []), ...(unknown.length ? ['survey'] : [])];
+    const kinds = ['hunt', 'fish', 'fish', ...(unseen.length ? ['collector'] : []), ...(unknown.length ? ['survey'] : [])];
     const kind = pick(kinds);
     if (kind === 'hunt') {
       const zone = pick(ZONES);
       list.push({ kind, to: zone.name, pay: Math.round(180 + far(zone) / 25), title: `Sink or take a pirate in ${zone.name}`, detail: `Those waters lie ${whereabouts(isl, zone)}. Any one pirate ship will do. Tell of it at any tavern to be paid, on top of the bounty.` });
+    } else if (kind === 'fish') {
+      // The cook wants a particular fish, brought back here.
+      const fish = pick(FISH.filter((f) => !f.where.storm && f.odds >= 2));
+      list.push({ kind, to: isl.name, fishId: fish.id, pay: Math.round(fish.price * 3 + 40), title: `A ${fish.name.toLowerCase()} for the cook`, detail: `Any size, brought back to this tavern. It bites ${habitat(fish)}.` });
     } else if (kind === 'collector') {
       const to = pick(unseen);
       list.push({ kind, to: to.name, pay: Math.round(50 + far(to) / 18), title: `Find what is worth seeing on ${to.name}`, detail: `A collector is paying. ${to.name} lies ${whereabouts(isl, to)}. Go ashore, find its curiosity, and tell any tavern keeper.` });
@@ -92,19 +97,24 @@ export function isDone(job) {
   if (job.kind === 'collector') return save.finds.includes(job.to);
   if (job.kind === 'survey') return save.discovered.includes(job.to);
   if (job.kind === 'hunt') return job.done;
+  if (job.kind === 'fish') return (save.cargo[cargoKey(fishById(job.fishId))] || 0) > 0;
   return true; // freight and passengers only need bringing to the right port
 }
 // Can it be handed in at this port's tavern? Freight and passengers must be at their own port.
 export function canFinish(job, isl) {
   if (job.kind === 'freight') return job.to === isl.name && (save.cargo.freight || 0) >= job.crates;
-  if (job.kind === 'passenger') return job.to === isl.name;
+  if (job.kind === 'passenger' || job.kind === 'fish') return job.to === isl.name && isDone(job);
   return isDone(job);
 }
 // Freight that went down with a ship, or was left behind with a fleet ship, cannot be delivered.
 export const freightLost = (job) => job.kind === 'freight' && (save.cargo.freight || 0) < job.crates;
 
-function drop(job) {
+function drop(job, handIn = false) {
   save.jobs = save.jobs.filter((j) => j !== job);
+  if (handIn && job.kind === 'fish' && isDone(job)) {
+    const key = cargoKey(fishById(job.fishId));
+    if (--save.cargo[key] <= 0) delete save.cargo[key];
+  }
   if (job.kind === 'freight') {
     save.cargo.freight = Math.max(0, (save.cargo.freight || 0) - job.crates);
     if (!save.cargo.freight) delete save.cargo.freight;
@@ -112,7 +122,7 @@ function drop(job) {
 }
 // Hand the job in and be paid. Returns the name of any reward earned along with the coins.
 export function finish(job) {
-  drop(job);
+  drop(job, true);
   save.coins += job.pay;
   save.jobsDone++;
   const reward = JOB_REWARDS[save.jobsDone] ? grant(JOB_REWARDS[save.jobsDone]) : '';
@@ -138,9 +148,18 @@ export function summary(job, from) {
   const t = target(job), where = t ? whereabouts(from, t) : '';
   if (job.kind === 'freight') return freightLost(job) ? `Freight for ${job.to}: lost` : `${job.crates} crates of ${job.what} for ${job.to}, ${where}`;
   if (job.kind === 'passenger') return `${job.who} for ${job.to}, ${where}`;
+  if (job.kind === 'fish') return isDone(job) ? `A ${fishById(job.fishId).name.toLowerCase()} for the cook at ${job.to}: in your hold, ${where}` : `A ${fishById(job.fishId).name.toLowerCase()} for the cook at ${job.to}: it bites ${habitat(fishById(job.fishId))}`;
   if (isDone(job)) return `${job.title}: done, report at any tavern`;
   return `${job.title}, ${where}`;
 }
+// What is left to do, as the keeper of `isl` would put it.
+export function status(job, isl) {
+  const where = (t) => whereabouts(isl, t);
+  if (job.kind === 'fish') return isDone(job) ? `You have one aboard. Bring it to ${job.to}, ${where(target(job))}.` : `Still to catch. It bites ${habitat(fishById(job.fishId))}.`;
+  if (isDone(job) && job.to !== isl.name) return `Not here: ${job.to} is ${where(target(job))}.`;
+  return `Still to do. It lies ${where(target(job))}.`;
+}
+
 // How many more jobs until the next reward, for the tavern keeper to mention.
 export function nextRewardIn() {
   const next = Object.keys(JOB_REWARDS).map(Number).find((n) => n > save.jobsDone);

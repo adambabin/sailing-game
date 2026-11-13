@@ -29,6 +29,11 @@ export function sailPattern(kind, stripe) {
       g.beginPath(); g.moveTo(x, y - 24); g.lineTo(x + 18, y); g.lineTo(x, y + 24); g.lineTo(x - 18, y); g.fill();
     }
   }
+  if (kind === 'scales') {
+    for (let j = 0; j < 6; j++) for (let i = 0; i < 5; i++) {
+      g.beginPath(); g.arc(i * 32 + (j % 2) * 16, j * 24 + 4, 15, 0, Math.PI); g.lineWidth = 4; g.strokeStyle = g.fillStyle; g.stroke();
+    }
+  }
   if (kind === 'sun') {
     g.beginPath(); g.arc(64, 64, 26, 0, 7); g.fill();
     for (let i = 0; i < 12; i++) {
