@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>Tradewind</title>
+<title>Sail Away</title>
+<meta name="theme-color" content="#10283a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sail Away">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2310283a'/%3E%3Cpath d='M33 10 L33 44 L14 44 Z' fill='%23f6ecd2'/%3E%3Cpath d='M36 16 L36 44 L50 44 Z' fill='%23f0c05a'/%3E%3Cpath d='M10 48 H54 L48 55 H16 Z' fill='%23d9453c'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Nunito+Sans:wght@500;700;800&display=swap">
 <style>
 /* Layout: the sea fills the screen; small chart-like panels sit in the corners. */
@@ -132,7 +138,19 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 .pad button.held small, .pad button[aria-pressed="true"] small { color: var(--ink); }
 
 #help { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px var(--gap-r) 16px var(--gap-l); background: rgba(8, 24, 36, 0.45); z-index: 5; }
-#help .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; max-width: 430px; width: 100%; box-sizing: border-box; max-height: 100%; overflow: auto; }
+#help .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; max-width: 430px; width: 100%; box-sizing: border-box; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+/* The card's words scroll, while the Set sail button stays in view at the bottom. */
+.help-body { overflow: auto; padding: 22px 24px 4px; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.help-foot { padding: 12px 24px 18px; border-top: 1px solid var(--line); }
+.help-foot .go { width: 100%; }
+/* On a touch screen the help talks about buttons; with a keyboard, about keys. */
+body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none; }
+/* On any touch screen, every button is big enough for a thumb. */
+@media (pointer: coarse) {
+  #tools button { min-height: 40px; }
+  #topright #helpbtn, #topright #pausebtn { width: 42px; height: 42px; }
+}
+.sheet, #pause .card { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 #help h1 { font-family: var(--display); font-weight: 400; font-size: 38px; margin: 0 0 2px; }
 #help p { margin: 0 0 14px; color: var(--muted); line-height: 1.5; }
 #help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0 0 16px; }
@@ -153,8 +171,15 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
   .gauge { min-width: 34px; }
   .gauge small { font-size: 9px; letter-spacing: 0.06em; }
   .gauge b { font-size: 15px; }
-  #tools { gap: 1px; max-width: calc(100vw - 122px); }
-  #tools button { padding: 6px 4px; font-size: 10.5px; }
+  /* Bigger buttons for thumbs: everything you tap is at least about 40 pixels. */
+  #tools { gap: 2px; max-width: calc(100vw - 132px); padding: 3px; }
+  #tools button { padding: 0 8px; min-height: 38px; font-size: 12.5px; }
+  #helpbtn, #pausebtn { width: 42px; height: 42px; }
+  #dial { width: 84px; padding: 4px 4px 2px; }
+  #dial svg { width: 74px; height: 74px; }
+  #dial small { font-size: 9px; }
+  .swatches button { width: 36px; height: 36px; }
+  .trade-row button, .close { min-height: 38px; }
   #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
   #chips { top: calc(112px + env(safe-area-inset-top, 0px)); }
   #compass { top: calc(112px + env(safe-area-inset-top, 0px)); left: var(--gap-l); transform: none; width: calc(100vw - 170px); }
@@ -166,7 +191,23 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
   #hint { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
   #reel { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); }
   .sheet { max-height: calc(100% - 40px); }
-  #toast { top: calc(180px + env(safe-area-inset-top, 0px)); font-size: 18px; }
+  /* Notices sit below the wind dial so it never hides them. */
+  #toast, body.compass-on #toast { top: calc(232px + env(safe-area-inset-top, 0px)); font-size: 18px; max-width: calc(100vw - 32px); }
+}
+/* A phone held sideways: little height, so screens use nearly all of it, and the pause menu goes in two columns. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .sheet { max-height: calc(100% - 20px); }
+  #help .card { max-width: 560px; }
+  .help-body { padding: 16px 20px 4px; }
+  #help h1 { font-size: 30px; }
+  .help-foot { padding: 10px 20px 12px; }
+  #pause .card { width: min(560px, 100%); grid-template-columns: 1fr 1fr; padding: 14px 18px; gap: 8px; }
+  #pause h1, #pause p, #pause h2, #pause-resume { grid-column: 1 / -1; }
+  #pause h1 { font-size: 26px; }
+  #pause button { padding: 9px 12px; }
+  #chart-body { flex-wrap: nowrap; align-items: flex-start; }
+  #chart-side { flex: 0 0 270px; max-height: calc(100vh - 100px); overflow: auto; }
+  #toast { top: calc(66px + env(safe-area-inset-top, 0px)); font-size: 17px; }
 }
 </style>
 </head>
@@ -255,9 +296,20 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 
 <div id="help">
   <div class="card">
-    <h1>Tradewind</h1>
+   <div class="help-body">
+    <h1>Sail Away</h1>
     <p>A quiet sail among the islands. The wind does the work; you choose how much sail to carry and where to point her.</p>
-    <dl>
+    <dl class="touch-only">
+      <dt>Joystick</dt><dd>Left and right steer. Up and down raise and lower the sails. Ashore, it walks you anywhere.</dd>
+      <dt>Yellow button</dt><dd>Whatever you can do right now: go ashore, visit a place, row back, board a ship</dd>
+      <dt>&#9875; Anchor</dt><dd>Drop or weigh anchor</dd>
+      <dt>Hook</dt><dd>Fish: tap to cast, tap when it bites, then hold to reel in</dd>
+      <dt>&#9664; &#9654; Fire</dt><dd>Fire the left or right guns</dd>
+      <dt>Drag, pinch</dt><dd>Look around and zoom</dd>
+      <dt>Map, Compass, View</dt><dd>Chart and logbook, a compass strip, and the view from the wheel</dd>
+      <dt>II</dt><dd>Pause, sound, and the testing tools</dd>
+    </dl>
+    <dl class="keys-only">
       <dt>Stick, or A / D</dt><dd>Steer to port and starboard</dd>
       <dt>Stick, or W / S</dt><dd>Raise and lower the sails</dd>
       <dt>Space or &#9875;</dt><dd>Drop or weigh anchor</dd>
@@ -274,7 +326,8 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
     <p>The dial shows where the wind is coming from. Keep the red wedge off your bow: no ship can sail straight into the wind.</p>
     <p>Pirates keep to the four red circles on your chart. Stay out of them and the sea is peaceful.</p>
     <p>Drop anchor by a port's dock to go ashore. On foot, the stick or the same keys walk you in any direction and the view follows.</p>
-    <button id="help-go" class="go">Set sail</button>
+   </div>
+   <div class="help-foot"><button id="help-go" class="go">Set sail</button></div>
   </div>
 </div>
 
@@ -286,6 +339,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
     <button id="pause-map" class="close">Map and logbook</button>
     <button id="pause-help" class="close">Controls</button>
     <button id="pause-sound" class="close">Sound</button>
+    <button id="pause-detail" class="close">Graphics</button>
     <h2>Testing tools</h2>
     <button id="pause-ship" class="close">Try the next ship</button>
     <button id="pause-time" class="close">Skip three hours</button>

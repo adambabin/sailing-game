@@ -6,8 +6,7 @@ import { WAVE_COUNT, sea } from './waves.js';
 import { MAX_ISLANDS } from './islands.js';
 
 const CELL = 2.5; // metres between grid points near the ship
-const N = 220;
-const INNER = 70; // grid is evenly spaced out to here, then stretches to the horizon
+const INNER_FRAC = 70 / 110; // the grid is evenly spaced out to this share of its half-width, then stretches to the horizon
 
 const vertexShader = /* glsl */ `
 uniform float uTime;
@@ -162,7 +161,8 @@ void main() {
 }
 `;
 
-export function createOcean(waves, islands) {
+// `N` is how many squares the sea is made of along each side: fewer is lighter work for a phone.
+export function createOcean(waves, islands, N = 220) {
   const half = N / 2;
   const positions = new Float32Array((N + 1) * (N + 1) * 3);
   let k = 0;
@@ -171,6 +171,7 @@ export function createOcean(waves, islands) {
       const gi = i - half, gj = j - half;
       const m = Math.max(Math.abs(gi), Math.abs(gj));
       let s = 1;
+      const INNER = Math.round(half * INNER_FRAC);
       if (m > INNER) {
         const d = (m - INNER) / (half - INNER);
         s = 1 + d * d * d * 36;

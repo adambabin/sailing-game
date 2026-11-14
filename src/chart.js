@@ -46,9 +46,10 @@ export function createChart() {
 
   // Fit the chart to the screen: as large as will go, on any device.
   function size() {
-    const wide = window.innerWidth >= 860;
-    const room = wide ? Math.min(window.innerWidth - 420, 760) : window.innerWidth - 64;
-    W = Math.round(Math.max(240, Math.min(room, (window.innerHeight - (wide ? 120 : 210)) * aspect)));
+    const sideways = window.innerWidth > window.innerHeight && window.innerHeight <= 520; // a phone held sideways
+    const wide = window.innerWidth >= 860 || sideways;
+    const room = wide ? Math.min(window.innerWidth - (sideways ? 360 : 420), 760) : window.innerWidth - 64;
+    W = Math.round(Math.max(200, Math.min(room, (window.innerHeight - (sideways ? 112 : wide ? 120 : 210)) * aspect)));
     H = Math.round(W / aspect);
     const scale = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = W * scale;

@@ -31,8 +31,15 @@ import { createShip, SHIP_COLORS, SHIP_TYPES, NO_GO } from './ship.js';
 import { createAudio, MODE_LABELS } from './audio.js';
 
 const canvas = document.getElementById('sea');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Graphics: "light" draws fewer pixels and a coarser sea, which keeps phones smooth and cool.
+// Phones and tablets start on light; it can be changed in the pause menu (the page reloads to apply it).
+const touchScreen = window.matchMedia('(pointer: coarse)').matches;
+document.body.classList.toggle('touch', touchScreen);
+let detail = touchScreen ? 'light' : 'full';
+try { detail = localStorage.getItem('sailaway-detail') || detail; } catch {}
+const LIGHT = detail === 'light';
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LIGHT, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, LIGHT ? 1.5 : 2));
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xffffff, 500, 5000);
@@ -57,7 +64,7 @@ function updateWind(t) {
 // ---- World -----------------------------------------------------------------------
 const waves = buildWaves(WIND_BASE);
 const islands = createIslands();
-const ocean = createOcean(waves, FEATURES);
+const ocean = createOcean(waves, FEATURES, LIGHT ? 150 : 220);
 const sky = createSky();
 const ship = createShip(waves);
 // Pick up where the last session left off, as long as that spot is still open water.
@@ -1018,6 +1025,13 @@ document.getElementById('pausebtn').addEventListener('click', () => setPaused(tr
 document.getElementById('pause-resume').addEventListener('click', () => setPaused(false));
 document.getElementById('pause-map').addEventListener('click', () => { setPaused(false); if (!chart.isOpen) toggleChart(); });
 document.getElementById('pause-help').addEventListener('click', () => { pauseEl.hidden = true; help.hidden = false; });
+const detailBtn = document.getElementById('pause-detail');
+detailBtn.textContent = LIGHT ? 'Graphics: light (smoother)' : 'Graphics: full';
+detailBtn.addEventListener('click', () => {
+  saveGame();
+  try { localStorage.setItem('sailaway-detail', LIGHT ? 'full' : 'light'); } catch {}
+  location.reload(); // the sea is built once, so the page starts again (your voyage is saved)
+});
 pauseSound.addEventListener('click', () => { cycleSound(); audio.pause(true); pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode]; });
 // The testing tools live here too. Each says what it did on the line underneath.
 const pauseNote = document.getElementById('pause-note');
@@ -1298,7 +1312,7 @@ window.game = {
   set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
-  get paused() { return paused; }, setPaused,
+  get paused() { return paused; }, setPaused, detail, renderer,
   ports: () => ISLANDS.filter((i) => i.portInfo),
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {

@@ -1,4 +1,4 @@
-# Tradewind (working title)
+# Sail Away
 
 A relaxing 3D sailing game that runs in a web browser, on a laptop or a phone.
 You sail a small sloop among Caribbean-style islands. The wind does the work;
@@ -26,6 +26,7 @@ Play it: https://adambabin.github.io/sailing-game/
 | Stand at the wheel / view from astern | `V` | View button |
 | Try the next ship (testing) | `B` | In the pause menu |
 | Sound / no music / muted | `N` | In the pause menu |
+| Graphics: light (smoother on phones) or full | | In the pause menu |
 | Start a new voyage (erases progress, asks twice) | | Reset button |
 | Pause | `Esc` | II button |
 
