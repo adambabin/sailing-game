@@ -566,7 +566,8 @@ function cycleSound() {
   audio.start();
   showToast('Sound: ' + MODE_LABELS[audio.cycleMode()]);
 }
-for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.start());
+// Sound may only start from a tap or key press. iPhones only count a finished tap (touchend or click), so listen for all of them.
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(ev, () => audio.start(), { capture: true, passive: true });
 document.addEventListener('visibilitychange', () => {
   audio.pause(document.hidden || paused);
   if (document.hidden) saveGame();
@@ -655,6 +656,7 @@ function toggleChart() {
 }
 chartBtn.addEventListener('click', toggleChart);
 document.getElementById('chart-close').addEventListener('click', toggleChart);
+document.getElementById('chart-close-foot').addEventListener('click', toggleChart);
 
 function goAshore(isl, useDock) {
   shore.land(isl, ship.state, useDock);

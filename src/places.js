@@ -379,26 +379,33 @@ export function createPlaces(game) {
   }
 
   const builders = { tavern, market, shipwright, house };
+  // Show the sheet, scrolled to the top, with the right word on its close buttons.
+  const closeHead = document.getElementById('place-close'), closeFoot = document.getElementById('place-close-foot');
+  function reveal(word) {
+    closeHead.textContent = closeFoot.textContent = word;
+    body.scrollTop = 0;
+    panel.hidden = false;
+  }
   const api = {
     get isOpen() { return !!open; },
     open(isl, kind) {
       open = { isl, kind };
       builders[kind](isl);
-      panel.hidden = false;
+      reveal('Leave');
     },
     // A simple card of text, used for curiosities found on the islands.
     show(heading, paragraphs) {
       open = { kind: 'card' };
       title.textContent = heading;
       body.replaceChildren(...paragraphs.map((t, i) => h('p', { className: i ? '' : 'quote' }, t)));
-      panel.hidden = false;
+      reveal('Close');
     },
     // A card holding any content (used for treasure maps).
     card(heading, ...nodes) {
       open = { kind: 'card' };
       title.textContent = heading;
       body.replaceChildren(...nodes);
-      panel.hidden = false;
+      reveal('Close');
     },
     close() {
       open = null;
@@ -406,5 +413,6 @@ export function createPlaces(game) {
     },
   };
   document.getElementById('place-close').addEventListener('click', api.close);
+  document.getElementById('place-close-foot').addEventListener('click', api.close);
   return api;
 }

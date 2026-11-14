@@ -52,8 +52,21 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 #dial svg { display: block; width: 96px; height: 96px; margin: 0 auto; }
 #dial small { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 
-.sheet { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 4; box-sizing: border-box; width: min(430px, calc(100vw - var(--gap-l) - var(--gap-r))); max-height: calc(100% - 150px); overflow: auto; padding: 14px 16px; background: rgba(13, 38, 56, 0.86); }
-.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+/* Every menu is three parts: a heading that stays put at the top, the middle that scrolls,
+   and (on phones) a big Leave or Close button that stays put at the bottom. It always fits
+   inside the screen, clear of the notch and the home bar. */
+.sheet { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 4; box-sizing: border-box; width: min(430px, calc(100vw - var(--gap-l) - var(--gap-r))); max-height: calc(100% - 150px); display: flex; flex-direction: column; overflow: hidden; padding: 0; background: rgba(13, 38, 56, 0.92); }
+.sheet-head { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+#place-body, #chart-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 16px 14px; overscroll-behavior: contain; }
+.sheet-foot { flex: none; display: none; padding: 10px 16px 12px; border-top: 1px solid var(--line); }
+.sheet-foot .go { width: 100%; }
+body.touch .sheet-foot { display: block; }
+/* The pause menu: the same idea. */
+#pause .card { display: flex; flex-direction: column; overflow: hidden; padding: 0; gap: 0; }
+.pause-head { flex: none; padding: 18px 20px 8px; }
+.pause-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; gap: 10px; padding: 6px 20px 14px; overscroll-behavior: contain; }
+.pause-foot { flex: none; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
+.pause-foot .go { width: 100%; }
 .sheet h2 { font-family: var(--display); font-weight: 400; font-size: 24px; margin: 0; text-wrap: balance; }
 .close { border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; font-weight: 700; }
 .go { background: var(--brass); color: var(--ink); font-weight: 800; padding: 11px 20px; border-radius: 9px; font-size: 15px; }
@@ -137,7 +150,7 @@ body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
 .pad button.held, .pad button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
 .pad button.held small, .pad button[aria-pressed="true"] small { color: var(--ink); }
 
-#help { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px var(--gap-r) 16px var(--gap-l); background: rgba(8, 24, 36, 0.45); z-index: 5; }
+#help { position: fixed; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) var(--gap-r) max(16px, env(safe-area-inset-bottom, 0px)) var(--gap-l); background: rgba(8, 24, 36, 0.45); z-index: 5; }
 #help .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; max-width: 430px; width: 100%; box-sizing: border-box; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 /* The card's words scroll, while the Set sail button stays in view at the bottom. */
 .help-body { overflow: auto; padding: 22px 24px 4px; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
@@ -157,13 +170,13 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
 #help dt { font-weight: 800; white-space: nowrap; }
 #help dd { margin: 0; color: var(--muted); }
 #helpbtn, #pausebtn { width: 34px; height: 34px; border-radius: 50%; font-weight: 800; }
-#pause { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(8, 24, 36, 0.6); z-index: 6; }
-#pause .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; width: min(300px, 100%); box-sizing: border-box; display: grid; gap: 10px; text-align: center; }
+#pause { position: fixed; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgba(8, 24, 36, 0.6); z-index: 6; }
+#pause .card { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; width: min(300px, 100%); box-sizing: border-box; text-align: center; }
 #pause h1 { font-family: var(--display); font-weight: 400; font-size: 34px; margin: 0; }
 #pause p { margin: 0 0 6px; color: var(--muted); }
 #pause button { padding: 11px 20px; font-size: 15px; }
 #pause h2 { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
-#pause .card { max-height: 100%; overflow: auto; }
+#pause .card { max-height: 100%; }
 #pause-note { min-height: 1.3em; margin: 0 !important; }
 #tool-reset[data-sure] { background: var(--coral); color: var(--ink); }
 @media (max-width: 560px) {
@@ -190,23 +203,27 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
   #pad-right { display: grid; grid-template-columns: 60px 60px; gap: 10px; }
   #hint { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
   #reel { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); }
-  .sheet { max-height: calc(100% - 40px); }
+  /* On a phone a menu fills the screen, between the notch and the home bar. */
+  .sheet { max-height: calc(100% - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); top: calc(50% + (env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) / 2); }
   /* Notices sit below the wind dial so it never hides them. */
   #toast, body.compass-on #toast { top: calc(232px + env(safe-area-inset-top, 0px)); font-size: 18px; max-width: calc(100vw - 32px); }
 }
 /* A phone held sideways: little height, so screens use nearly all of it, and the pause menu goes in two columns. */
 @media (max-height: 520px) and (orientation: landscape) {
-  .sheet { max-height: calc(100% - 20px); }
+  .sheet { max-height: calc(100% - 16px); max-height: calc(100dvh - 16px); }
   #help .card { max-width: 560px; }
   .help-body { padding: 16px 20px 4px; }
   #help h1 { font-size: 30px; }
   .help-foot { padding: 10px 20px 12px; }
-  #pause .card { width: min(560px, 100%); grid-template-columns: 1fr 1fr; padding: 14px 18px; gap: 8px; }
-  #pause h1, #pause p, #pause h2, #pause-resume { grid-column: 1 / -1; }
+  #pause .card { width: min(560px, 100%); }
+  .pause-head { padding: 10px 18px 4px; }
+  .pause-body { grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 18px 10px; }
+  .pause-foot { padding: 8px 18px 10px; }
+  #pause h2, #pause-note { grid-column: 1 / -1; }
   #pause h1 { font-size: 26px; }
   #pause button { padding: 9px 12px; }
   #chart-body { flex-wrap: nowrap; align-items: flex-start; }
-  #chart-side { flex: 0 0 270px; max-height: calc(100vh - 100px); overflow: auto; }
+  #chart-side { flex: 0 0 270px; }
   #toast { top: calc(66px + env(safe-area-inset-top, 0px)); font-size: 17px; }
 }
 </style>
@@ -261,11 +278,13 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
       <button id="new-voyage" class="close">Start a new voyage</button>
     </div>
   </div>
+  <div class="sheet-foot"><button id="chart-close-foot" class="go">Close</button></div>
 </div>
 
 <div id="place" class="panel sheet" hidden>
   <div class="sheet-head"><h2 id="place-title"></h2><button id="place-close" class="close">Leave</button></div>
   <div id="place-body"></div>
+  <div class="sheet-foot"><button id="place-close-foot" class="go">Leave</button></div>
 </div>
 
 <button id="action" class="go" hidden></button>
@@ -333,9 +352,11 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
 
 <div id="pause" hidden>
   <div class="card" role="dialog" aria-label="Paused">
+   <div class="pause-head">
     <h1>Paused</h1>
     <p>The sea will wait. Your voyage is saved.</p>
-    <button id="pause-resume" class="go">Resume</button>
+   </div>
+   <div class="pause-body">
     <button id="pause-map" class="close">Map and logbook</button>
     <button id="pause-help" class="close">Controls</button>
     <button id="pause-sound" class="close">Sound</button>
@@ -347,6 +368,8 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
     <button id="pause-storm" class="close">Bring a storm</button>
     <button id="pause-creature" class="close">Show a sea creature</button>
     <p id="pause-note"></p>
+   </div>
+   <div class="pause-foot"><button id="pause-resume" class="go">Resume</button></div>
   </div>
 </div>
 

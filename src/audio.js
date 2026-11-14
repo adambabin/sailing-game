@@ -34,6 +34,24 @@ export function createAudio() {
     return { filter, gain };
   }
 
+  // An iPhone's silent switch mutes web-page sound unless the page plays as media, like a music app.
+  // Newer iPhones let a page say so directly; older ones switch over when an ordinary <audio> element
+  // is playing, so a moment of silence, made right here in code, is kept looping quietly.
+  let unlocked = false, keeper = null, held = false;
+  function playThroughSilentMode() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    if (keeper) { if (keeper.paused && !held) keeper.play().catch(() => {}); return; }
+    const rate = 8000, n = rate / 2, bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
+    const text = (at, s) => [...s].forEach((c, i) => v.setUint8(at + i, c.charCodeAt(0)));
+    text(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); text(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); text(36, 'data'); v.setUint32(40, n * 2, true);
+    keeper = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
+    keeper.loop = true;
+    keeper.setAttribute('playsinline', '');
+    keeper.play().catch(() => {});
+  }
+
   function build() {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain();
@@ -144,7 +162,16 @@ export function createAudio() {
     // Browsers only allow sound after a click, tap or key press, so this is called from those.
     start() {
       if (!ctx) build();
-      else if (ctx.state === 'suspended' && !document.hidden) ctx.resume();
+      if (ctx.state !== 'running' && !document.hidden && !held) ctx.resume(); // also wakes it after a phone call ('interrupted')
+      if (!unlocked) {
+        unlocked = true;
+        // iPhones need a sound played from inside the tap itself before they let a page make any more.
+        const b = ctx.createBufferSource();
+        b.buffer = ctx.createBuffer(1, 1, 22050);
+        b.connect(ctx.destination);
+        b.start(0);
+      }
+      playThroughSilentMode();
     },
     cycleMode() {
       mode = MODES[(MODES.indexOf(mode) + 1) % MODES.length];
@@ -153,7 +180,9 @@ export function createAudio() {
       return mode;
     },
     pause(hidden) {
+      held = hidden;
       if (ctx) hidden ? ctx.suspend() : ctx.resume();
+      if (keeper) hidden ? keeper.pause() : keeper.play().catch(() => {});
     },
     anchor(dropping) {
       if (!ctx) return;
