@@ -951,10 +951,12 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyM') toggleChart();
   else if (e.code === 'KeyC') toggleCompass();
   else if (e.code === 'KeyV') toggleView();
-  else if (e.code === 'Digit1' && !e.repeat) fire(1);
+  else if ((e.code === 'Digit1' || e.code === 'KeyQ') && !e.repeat) fire(1); // Q or 1: the port (left) guns
   else if (e.code === 'Digit2' && !e.repeat) fire(-1);
   else if (e.code === 'KeyB') tryNextShip();
-  else if (e.code === 'KeyE' && !e.repeat) doAction();
+  // E fires the starboard (right) guns while sailing. Ashore there are no guns, so it does the action
+  // (open a door, dig, row back). At sea the action (go ashore, board a prize) is on Enter or the button.
+  else if (e.code === 'KeyE' && !e.repeat) { if (shore.state.active) doAction(); else fire(-1); }
   else if (e.code === 'KeyF' && !e.repeat) { fishHeld = true; pressFish(); }
   else if (e.code === 'Enter' || e.code === 'Escape') {
     if (!help.hidden) closeHelp();

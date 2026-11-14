@@ -18,10 +18,10 @@ Play it: https://adambabin.github.io/sailing-game/
 | Zoom | Scroll wheel | Pinch |
 | Skip ahead three hours (testing) | `T` | In the pause menu |
 | Change the weather (testing) | `R` | In the pause menu |
-| Go ashore / visit a place / row back | `E` | The yellow button |
+| Go ashore / visit a place / row back | `Enter` (or `E` on foot) | The yellow button |
 | Map and logbook | `M` | Map button |
 | Compass strip | `C` | Compass button |
-| Fire the port / starboard guns | `1` / `2` | The two Fire buttons |
+| Fire the port (left) / starboard (right) guns | `Q` / `E` (or `1` / `2`) | The two Fire buttons |
 | Fish: cast, strike, hold to reel in | `F` | Hook button |
 | Stand at the wheel / view from astern | `V` | View button |
 | Try the next ship (testing) | `B` | In the pause menu |
