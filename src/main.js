@@ -6,6 +6,7 @@ import { buildWaves, waveHeight, sea } from './waves.js';
 import { createEnvironment, WEATHERS } from './environment.js';
 import { createWindFx } from './windfx.js';
 import { createOcean } from './ocean.js';
+import { createWake } from './wake.js';
 import { createSky } from './sky.js';
 import { createIslands, ISLANDS, FEATURES, nightLights, terrainHeight, coastAt, updateIslands } from './islands.js';
 import { createShore } from './shore.js';
@@ -64,7 +65,7 @@ function updateWind(t) {
 // ---- World -----------------------------------------------------------------------
 const waves = buildWaves(WIND_BASE);
 const islands = createIslands();
-const ocean = createOcean(waves, FEATURES, LIGHT ? 150 : 220);
+const ocean = createOcean(waves, FEATURES, LIGHT ? 150 : 220, LIGHT);
 const sky = createSky();
 const ship = createShip(waves);
 // Pick up where the last session left off, as long as that spot is still open water.
@@ -415,61 +416,54 @@ const treasure = createTreasure();
 scene.add(people.group, finds.group, treasure.group);
 applyPaint(scene);
 
-// Foam wake: small white patches that lie on the water, spread out and fade.
-const WAKE_N = 160;
-const wake = new THREE.InstancedMesh(
-  new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }),
-  WAKE_N
-);
-wake.frustumCulled = false;
-scene.add(wake);
-const puffs = Array.from({ length: WAKE_N }, () => ({ x: 0, z: 0, vx: 0, vz: 0, age: 99, life: 1, size: 1 }));
-let puffNext = 0, puffTimer = 0;
-// Drop a patch of foam on the water (used by dolphins and fish as well as the wake).
-function foamAt(x, z, size) {
-  Object.assign(puffs[puffNext++ % WAKE_N], { x, z, vx: 0, vz: 0, age: 0, life: 2.2, size });
-}
-const mtx = new THREE.Matrix4(), qTilt = new THREE.Quaternion(), vPos = new THREE.Vector3(), vScl = new THREE.Vector3();
-const vUp = new THREE.Vector3(0, 1, 0), vNrm = new THREE.Vector3();
-function updateWake(dt, time) {
+// Wakes and spray (see wake.js). Foam is painted into the sea itself from a "wake picture".
+const wake = createWake(renderer, { light: LIGHT });
+scene.add(wake.spray);
+// Drop a patch of foam on the water (used by dolphins, fish and sea creatures).
+function foamAt(x, z, size) { wake.foamAt(x, z, size); }
+const myWake = {}; // remembers how far the ship has sailed since her last foam
+let dunkWas = 0;
+const WAKE_SHIPS = LIGHT ? 3 : 6; // how many other ships get a wake at once (the nearest ones)
+const vAhead = new THREE.Vector3(), vPos = new THREE.Vector3();
+// Lay down foam for this instant: the player's ship, the nearest other ships, and bow spray.
+function simWake(dt) {
   const s = ship.state;
-  const fx = Math.sin(s.heading), fz = Math.cos(s.heading);
-  puffTimer -= dt;
-  while (s.speed > 0.8 && puffTimer <= 0) {
-    puffTimer += 0.32 / (s.speed + 1);
-    const atBow = Math.random() < 0.4;
-    const side = Math.random() < 0.5 ? -1 : 1;
-    const along = atBow ? s.bow * 0.75 + Math.random() * 1.5 : s.stern - 1.3;
-    const off = atBow ? side * (s.halfBeam * 0.5 + Math.random() * 0.5) : (Math.random() - 0.5) * s.halfBeam;
-    const p = puffs[puffNext++ % WAKE_N];
-    p.x = s.x + fx * along + fz * off;
-    p.z = s.z + fz * along - fx * off;
-    // Bow foam peels away to each side; stern foam is left behind.
-    const push = atBow ? side * 0.22 * s.speed : (Math.random() - 0.5) * 0.3;
-    p.vx = fz * push;
-    p.vz = -fx * push;
-    p.age = 0;
-    p.life = 2.5 + Math.random() * 2.5;
-    p.size = (0.3 + Math.random() * 0.35) * Math.min(1.3, 0.5 + s.speed / 7);
+  wake.update(dt);
+  if (!s.sinking) wake.trail(s, ship.type.size, myWake, dt, 1);
+  // Other ships: only the few nearest the middle of the wake picture, and a sparser wake.
+  const near = [];
+  for (const v of vessels.list) {
+    if (v.gone || v.sinking || !(v.speed > 0.7)) continue;
+    const d = Math.hypot(v.x - wake.x, v.z - wake.z);
+    if (d < wake.span / 2 + 30) near.push([d, v]);
   }
-  puffs.forEach((p, i) => {
-    p.age += dt;
-    const k = p.age / p.life;
-    if (k >= 1) {
-      wake.setMatrixAt(i, mtx.makeScale(0, 0, 0));
-      return;
+  near.sort((p, q) => p[0] - q[0]);
+  for (const [, v] of near.slice(0, WAKE_SHIPS)) wake.trail(v, v.size, v.wakeMemo || (v.wakeMemo = {}), dt, LIGHT ? 0.5 : 0.7);
+
+  // Spray at the bow: a burst when she drops her bow into a wave, a little all the time when
+  // she is going fast in a lively sea. `dunk` is how far the water stands above where the bow rides.
+  const fx = Math.sin(s.heading), fz = Math.cos(s.heading);
+  const dunk = (s.bowWater || 0) - (s.y - Math.sin(s.pitch) * s.bow);
+  const rate = (dunk - dunkWas) / dt;
+  dunkWas = dunk;
+  if (s.speed > 2.5 && !s.sinking && !shore.state.active) {
+    let n = rate > 0.5 ? rate * s.speed * dt * 5 : 0;
+    n += Math.max(0, s.speed - 4.5) * sea.state * dt * 3;
+    n = Math.min(14, Math.floor(n + Math.random()));
+    // Thrown out from both sides of the bow, a bigger ship throwing bigger drops.
+    for (const side of [-1, 1]) {
+      const k = Math.floor(n / 2 + Math.random());
+      if (k < 1) continue;
+      const off = side * s.halfBeam * 0.5;
+      wake.splash(s.x + fx * s.bow * 0.82 + fz * off, (s.bowWater || 0) + 0.2, s.z + fz * s.bow * 0.82 - fx * off, k,
+        2.4 + Math.min(3, Math.max(0, rate)) * 0.9 + s.speed * 0.14, fz * side * 0.6 + fx * 0.2, -fx * side * 0.6 + fz * 0.2, Math.sqrt(s.halfBeam / 1.9));
     }
-    const slow = Math.exp(-p.age * 1.2);
-    p.x += p.vx * slow * dt;
-    p.z += p.vz * slow * dt;
-    const scale = p.size * (0.7 + 2.4 * k) * (k > 0.5 ? (1 - k) / 0.5 : 1);
-    const h = waveHeight(waves, p.x, p.z, time);
-    vNrm.set(h - waveHeight(waves, p.x + 1, p.z, time), 1, h - waveHeight(waves, p.x, p.z + 1, time)).normalize();
-    qTilt.setFromUnitVectors(vUp, vNrm);
-    wake.setMatrixAt(i, mtx.compose(vPos.set(p.x, h + 0.07, p.z), qTilt, vScl.set(scale, 1, scale)));
-  });
-  wake.instanceMatrix.needsUpdate = true;
+  }
+}
+// Redraw the wake picture around the part of the sea the camera is looking at.
+function drawWake() {
+  camera.getWorldDirection(vAhead);
+  wake.draw(camera.position.x + vAhead.x * 70, camera.position.z + vAhead.z * 70, env.foam);
 }
 
 // ---- Light, sky and sea colours follow the clock and the weather ----------------
@@ -482,7 +476,6 @@ function applyEnvironment(dt) {
   scene.fog.color.copy(env.horizon);
   scene.fog.near = env.fogNear;
   scene.fog.far = env.fogFar;
-  wake.material.color.copy(env.foam);
   ship.lanternLight.intensity = env.night * 10;
   const lit = env.night > 0.35;
   for (const l of nightLights) {
@@ -1292,9 +1285,10 @@ function frame() {
   treasure.update();
   home.update(dt, time, wind);
   people.update(dt, time, env, ashore ? shore.state : ship.state, ashore ? shore.state : null);
-  updateWake(dt, time);
+  simWake(dt);
+  drawWake();
   applyEnvironment(dt);
-  ocean.update(time, camera, env);
+  ocean.update(time, camera, env, wake);
   sky.update(camera, dt, env, wind);
   windFx.update(dt, camera, ship.state, wind, env);
   updateHud(dt);
@@ -1314,10 +1308,10 @@ window.game = {
   set fishHeld(v) { fishHeld = v; },
   // Jump the camera straight to its subject on the next frame (after teleporting things in tests).
   snapCamera() { first = true; },
-  get paused() { return paused; }, setPaused, detail, renderer,
+  get paused() { return paused; }, setPaused, detail, renderer, wake, ocean,
   ports: () => ISLANDS.filter((i) => i.portInfo),
   // Fast-forward the sailing simulation by a number of seconds.
   step(seconds, input = { steer: 0, sail: 0 }) {
-    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); pickFleetEnemy(1 / 60); updateCreatures(1 / 60, time); }
+    for (let i = 0; i < seconds * 60; i++) { time += 1 / 60; updateStorms(1 / 60, time); env.update(1 / 60, time); updateWind(time); ship.update(1 / 60, time, input, wind); world.ashore = shore.state.active; world.wanted = isWanted(); vessels.update(1 / 60, time, world); combat.update(1 / 60, time, targets); loot.update(1 / 60, time, shore.state.active ? null : ship.state, wind, salvage); listenForBattle(1 / 60); pickFleetEnemy(1 / 60); updateCreatures(1 / 60, time); simWake(1 / 60); }
   },
 };

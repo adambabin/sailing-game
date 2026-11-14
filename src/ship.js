@@ -500,7 +500,7 @@ export function createShip(waves) {
     aground: false,
     windAngle: 90, // degrees between the bow and the wind (0 = pointing straight into it)
     relWind: 0, // signed angle of the wind relative to the bow, for the dial
-    y: 0, pitch: 0, roll: 0,
+    y: 0, pitch: 0, roll: 0, vy: 0, vPitch: 0, bowWater: 0,
     halfBeam: 1.9, bow: 6, stern: -5, // size of the current ship, for the wake and for dolphins
     hull: 1, // how sound the hull is: 1 = undamaged, 0 = sinking
     sinking: 0, // seconds since she started to go down (0 = afloat)
@@ -567,9 +567,16 @@ export function createShip(waves) {
     // --- Float on the waves. A long hull bridges the small waves, so she moves less.
     const h = (dx, dz) => waveHeight(waves, s.x + fx * dz + px * dx, s.z + fz * dz + pz * dx, time);
     const hBow = h(0, size.bow), hStern = h(0, size.stern), hPort = h(size.half, 0), hStbd = h(-size.half, 0), hMid = h(0, 0);
-    const k = Math.min(1, dt * 5);
-    s.y += ((hBow + hStern + hPort + hStbd + 2 * hMid) / 6 - s.y) * k;
-    s.pitch += (-Math.atan2(hBow - hStern, size.bow - size.stern) * 0.85 - s.pitch) * k;
+    // She is carried on springs rather than glued to the water, which gives her some weight:
+    // she rises a touch late, overshoots slightly, and settles (this is looks only; it does
+    // not change her speed or steering).
+    const wantY = (hBow + hStern + hPort + hStbd + 2 * hMid) / 6;
+    const wantPitch = -Math.atan2(hBow - hStern, size.bow - size.stern) * 0.85;
+    s.vy += ((wantY - s.y) * 30 - s.vy * 7) * dt;
+    s.y += s.vy * dt;
+    s.vPitch += ((wantPitch - s.pitch) * 26 - s.vPitch * 6.2) * dt;
+    s.pitch += s.vPitch * dt;
+    s.bowWater = hBow; // the water's height at the bow, for the spray
     const heel = s.tack * Math.sin(THREE.MathUtils.degToRad(s.windAngle)) * s.sail * s.fill * type.heel;
     const lean = -turn * Math.min(1, s.speed / 6) * 0.12;
     s.roll += (Math.atan2(hPort - hStbd, size.half * 2) * 0.6 + heel + lean - s.roll) * Math.min(1, dt * 3);
