@@ -166,6 +166,7 @@ function salvage(item) {
 // The player's ship as the cannon code sees her: the same shape of thing as any other vessel.
 const me = {
   faction: 'player', reload: { port: 0, stbd: 0 }, gone: false, aim: 1,
+  get typeId() { return ship.typeId; },
   get x() { return ship.state.x; }, get z() { return ship.state.z; }, get y() { return ship.state.y; },
   get heading() { return ship.state.heading; },
   get vx() { return Math.sin(ship.state.heading) * ship.state.speed; }, get vz() { return Math.cos(ship.state.heading) * ship.state.speed; },
@@ -309,19 +310,64 @@ function updateDangers() {
   if (fleet.length) { const t = 'Fleet: ' + fleet.map((v) => `${v.type.name.toLowerCase()} ${Math.round(v.hull * 100)}%`).join(' · '); if (fleetChip.textContent !== t) fleetChip.textContent = t; }
   wantedChip.hidden = !isWanted();
   if (isWanted()) wantedChip.textContent = 'Wanted ' + '★'.repeat(Math.floor(wanted()));
-  // Name the nearest ship, and show how she is faring.
+  // Name the nearest ship, and show how she is faring: a name and a hull bar over her. Other ships
+  // close by that are damaged or in the fight get a bar of their own, without the name.
   let near = null, nd = 380;
-  if (!shore.state.active) for (const v of [...vessels.list, ...(creatures.legend && !creatures.legend.gone ? [creatures.legend] : [])]) { if (v.gone) continue; const d = Math.hypot(v.x - s.x, v.z - s.z); if (d < nd) { nd = d; near = v; } }
+  const close = [];
+  if (!shore.state.active) for (const v of [...vessels.list, ...(creatures.legend && !creatures.legend.gone ? [creatures.legend] : [])]) {
+    if (v.gone) continue;
+    const d = Math.hypot(v.x - s.x, v.z - s.z);
+    if (d < 380) close.push(v);
+    if (d < nd) { nd = d; near = v; }
+  }
   if (near) {
-    vPos.set(near.x, near.y + near.top + 6, near.z).project(camera);
-    vesselTag.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05;
-    const who = near.captain ? `${near.captain} · ${near.label.toLowerCase()}` : near.label;
-    const text = near.struck ? who + ' · colours struck' : near.sinking ? who + ' · sinking' : who + (near.hull < 0.995 ? ` · hull ${Math.round(near.hull * 100)}%` : '');
-    if (vesselTag.textContent !== text) vesselTag.textContent = text;
-    vesselTag.classList.toggle('foe', near.enemy === me);
-    vesselTag.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+    const at = screenAt(near);
+    vesselTag.hidden = !at;
+    if (at) {
+      const who = near.captain ? `${near.captain} · ${near.label.toLowerCase()}` : near.label;
+      const nerve = near.nerve && !near.fleet && (near.assist > 0 || near.struck) ? ` · ${near.nerve.word}` : ''; // you learn her captain's mettle once you have fought her
+      const text = near.struck ? who + ' · colours struck' : near.sinking ? who + ' · sinking' : who + nerve;
+      if (tagName.textContent !== text) tagName.textContent = text;
+      drawBar(tagBar, near);
+      vesselTag.classList.toggle('foe', near.enemy === me || near.faction === 'monster');
+      vesselTag.style.transform = `translate(-50%, -100%) translate(${at.x}px, ${at.y}px)`;
+    }
   } else vesselTag.hidden = true;
+  // The small bars for the others.
+  let used = 0;
+  for (const v of close) {
+    if (v === near || used >= 6) continue;
+    if (v.hull > 0.995 && v.enemy !== me && !(v.enemy && v.enemy.fleet) && !v.fleet) continue;
+    const at = screenAt(v);
+    if (!at) continue;
+    if (!miniBars[used]) { const b = mk('div', { className: 'mini-bar' }, mk('i'), mk('b')); labelBox.append(b); miniBars.push(b); }
+    const b = miniBars[used++];
+    b.hidden = false;
+    drawBar(b, v);
+    b.classList.toggle('foe', v.enemy === me || v.faction === 'monster');
+    b.style.transform = `translate(-50%, -100%) translate(${at.x}px, ${at.y}px)`;
+  }
+  for (let i = used; i < miniBars.length; i++) miniBars[i].hidden = true;
 }
+// Where a ship's tag goes on the screen (above her masts), or null if she is out of sight.
+function screenAt(v) {
+  vPos.set(v.x, v.y + v.top + 6, v.z).project(camera);
+  if (vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05) return null;
+  return { x: ((vPos.x + 1) / 2) * window.innerWidth, y: ((1 - vPos.y) / 2) * window.innerHeight };
+}
+// Fill a hull bar: green when sound, brass when hurt, red when near the end, and a white mark
+// at the point where she will strike her colours to you.
+function drawBar(bar, v) {
+  const fill = bar.firstChild, mark = bar.lastChild, h = Math.max(0, v.hull);
+  fill.style.width = (h * 100).toFixed(1) + '%';
+  const struck = v.struck || v.sinking, cut = vessels.strikePoint(v, me);
+  fill.className = v.sinking ? 'grave' : v.struck ? 'struck' : h < Math.max(0.25, cut) ? 'grave' : h < 0.6 ? 'hurt' : '';
+  mark.hidden = struck || !cut;
+  if (cut) mark.style.left = (cut * 100).toFixed(1) + '%';
+}
+const tagName = mk('span', { className: 'tag-name' }), tagBar = mk('div', { className: 'tag-bar' }, mk('i'), mk('b'));
+vesselTag.append(tagName, tagBar);
+const miniBars = [];
 function fire(side) {
   if (shore.state.active || !help.hidden) return;
   combat.fire(me, side, targets.filter((t) => !t.fleet)); // the gun crews never lay on your own ships

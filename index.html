@@ -116,6 +116,17 @@ body.touch .sheet-foot { display: block; }
 #reel-tip { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
 #vessel-tag { font-family: var(--body); font-size: 12px; font-weight: 700; }
 #vessel-tag.foe { border-color: var(--coral); color: var(--coral); }
+#vessel-tag .tag-name { display: block; text-align: center; }
+/* Hull bars over ships: a big one under the nearest ship's name, small ones over others in the fight. */
+.tag-bar, .mini-bar { position: relative; height: 9px; margin: 4px 0 1px; border-radius: 5px; background: rgba(20, 14, 8, 0.55); border: 1px solid rgba(246, 236, 210, 0.55); overflow: hidden; }
+.tag-bar { width: 100%; min-width: 130px; }
+.mini-bar { position: fixed; top: 0; left: 0; width: 70px; height: 7px; margin: 0; pointer-events: none; }
+.mini-bar.foe { border-color: var(--coral); }
+.tag-bar i, .mini-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: var(--good); }
+.tag-bar i.hurt, .mini-bar i.hurt { background: var(--brass); }
+.tag-bar i.grave, .mini-bar i.grave { background: var(--coral); }
+.tag-bar i.struck, .mini-bar i.struck { background: #e8e2d0; }
+.tag-bar b, .mini-bar b { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
 #chips { position: fixed; top: calc(70px + env(safe-area-inset-top, 0px)); left: var(--gap-l); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; pointer-events: none; }
 .chip { padding: 4px 10px; font-weight: 800; font-size: 12px; }
 #wanted { color: var(--coral); border-color: var(--coral); }

@@ -13,7 +13,17 @@ import { FACTIONS, ZONES, newCaptain, BOUNTY, LORD_BOUNTY } from './factions.js'
 const rand = (a, b) => a + Math.random() * (b - a);
 const HANDLING = { sloop: { cruise: 4.6, turn: 0.34 }, brig: { cruise: 4.0, turn: 0.24 }, galleon: { cruise: 3.6, turn: 0.17 } };
 const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd98a });
-const STRIKES_AT = { merchant: 0.3, navy: 0.16, pirate: 0.18 }; // hull at which a ship gives up the fight
+// When a ship beaten by you gives up the fight (hauls down her flag): the hull left at that point.
+// Each faction has its own usual point; each captain's nerve moves it up or down; and a ship that
+// is outgunned, or has lost her consorts, gives up sooner. `strikePoint()` puts these together.
+const STRIKES_AT = { merchant: 0.5, navy: 0.3, pirate: 0.34 };
+const NERVES = [
+  { word: 'faint-hearted', times: 1.35 }, // strikes early
+  { word: 'steady', times: 1 },
+  { word: 'stubborn', times: 0.6 }, // fights nearly to the last
+];
+const RANK = { sloop: 1, brig: 2, galleon: 3 }; // rough fighting weight of each kind of ship
+const GRACE = 3; // seconds after striking in which shot already in flight cannot sink her
 const STRUCK_FOR = 150; // seconds a surrendered ship waits to be boarded before slipping away
 
 // A random spot of open water, clear of every island, of `avoid`, and (unless told otherwise) of pirate waters.
@@ -40,6 +50,14 @@ function offAPort() {
 // Where a ship of this kind heads next when she has nothing else to do.
 const nextGoal = (v) => (v.raidZone || v.zone ? openWater(null, 0, v.raidZone || v.zone) : offAPort());
 
+// A captain's nerve, picked when the ship is made. Merchants are seldom stubborn; pirates often are.
+function pickNerve(faction) {
+  const r = Math.random();
+  if (faction === 'merchant') return NERVES[r < 0.45 ? 0 : r < 0.9 ? 1 : 2];
+  if (faction === 'navy') return NERVES[r < 0.2 ? 0 : r < 0.7 ? 1 : 2];
+  return NERVES[r < 0.3 ? 0 : r < 0.7 ? 1 : 2];
+}
+
 // `fx` supplies foam(), struck(), sunk(), surrendered() and left(). `fire(shooter, side, target)` looses a broadside.
 export function createVessels(waves, fx, fire) {
   const group = new THREE.Group();
@@ -63,6 +81,9 @@ export function createVessels(waves, fx, fire) {
       alarm: 0, // seconds she will keep running from whoever fired on her
       provoked: 0, // seconds she will keep fighting the player for having been fired on
       struck: 0, // seconds left to board her after she has struck her colours (0 = still flying them)
+      nerve: pickNerve(faction), // how readily her captain gives up
+      strikeAt: STRIKES_AT[faction] ? STRIKES_AT[faction] * 1 : 0, // the hull at which she will strike to you just now (worked out as she fights)
+      grace: 0, // seconds left in which more hits cannot sink her, just after she strikes
       fleet: faction === 'player', slot: 0,
       leader: null, // the ship she sails in company with (a squadron, patrol or convoy), if any
       escort: false, // a warship guarding a convoy
@@ -73,7 +94,11 @@ export function createVessels(waves, fx, fire) {
       // A cannonball has struck her.
       hit(damage, by) {
         if (v.sinking) return;
+        if (v.grace > 0) return; // she has just struck: the shot already in the air falls short or goes wide
+        const before = v.hull, yours = by.faction === 'player' && !v.fleet;
         v.hull = Math.max(0, v.hull - damage / (v.type.hullMax * v.tough));
+        // A ship still flying her colours that could strike to you strikes rather than go down in one blow.
+        if (yours && !v.struck && v.strikeAt > 0 && before >= v.strikeAt && v.hull < v.strikeAt) v.hull = Math.max(v.hull, Math.min(before, v.strikeAt) * 0.6);
         v.attacker = by;
         if (by.faction === 'player') v.assist = 90;
         if (v.faction === 'merchant') {
@@ -84,9 +109,10 @@ export function createVessels(waves, fx, fire) {
         else if (!v.fleet || by.faction !== 'player') v.enemy = by;
         fx.struck(v, by);
         if (v.hull <= 0) { v.struck = 0; v.sinking = 0.001; fx.sunk(v, by); }
-        else if (!v.fleet && !v.struck && by.faction === 'player' && v.hull < STRIKES_AT[v.faction]) {
+        else if (yours && !v.struck && v.hull < v.strikeAt) {
           // Beaten by you, she hauls down her flag and waits to be boarded.
           v.struck = STRUCK_FOR;
+          v.grace = GRACE;
           v.enemy = null;
           fx.surrendered(v);
         }
@@ -110,6 +136,21 @@ export function createVessels(waves, fx, fire) {
   // A pirate squadron in each stretch of pirate waters: a brig, with a sloop in company.
   for (const zone of ZONES) company(add('brig', 'pirate', zone), add('sloop', 'pirate', zone));
   let raidWait = rand(200, 380); // seconds until the navy next sweeps pirate waters
+  // The hull at which `v` will strike her colours to you, given her nerve and how the fight stands.
+  // 0 means she never will (your own ships, sea monsters).
+  function strikePoint(v, player) {
+    if (v.fleet || !STRIKES_AT[v.faction]) return 0;
+    let base = STRIKES_AT[v.faction] * v.nerve.times;
+    // Weigh your side against hers: your ship and fleet, her and the consorts still fighting with her.
+    let yours = RANK[player.typeId] || 1, hers = RANK[v.typeId];
+    for (const o of list) {
+      if (o.gone || o.sinking || o.struck || o === v) continue;
+      if (o.fleet) yours += RANK[o.typeId] * 0.6;
+      else if (o.faction === v.faction && (o.leader === v || v.leader === o || (v.leader && o.leader === v.leader)) && dist(o, v) < 600) hers += RANK[o.typeId] * 0.6;
+    }
+    base += THREE.MathUtils.clamp((yours / hers - 1) * 0.1, -0.08, 0.18);
+    return THREE.MathUtils.clamp(base, v.lord ? 0.1 : 0.12, 0.7);
+  }
   const leading = (v) => (v.leader && !v.leader.gone && !v.leader.sinking && !v.leader.struck ? v.leader : null);
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -178,7 +219,7 @@ export function createVessels(waves, fx, fire) {
         // After a while another ship of her kind comes over the horizon.
         if ((v.away -= dt) <= 0) {
           const p = openWater(player, 1000, v.zone);
-          Object.assign(v, { x: p.x, z: p.z, hull: 1, sinking: 0, gone: false, alarm: 0, provoked: 0, struck: 0, enemy: null, heading: rand(0, 6.28) });
+          Object.assign(v, { x: p.x, z: p.z, hull: 1, sinking: 0, gone: false, alarm: 0, provoked: 0, struck: 0, grace: 0, nerve: pickNerve(v.faction), enemy: null, heading: rand(0, 6.28) });
           v.goal = nextGoal(v);
           if (v.faction === 'pirate') v.captain = newCaptain(); // a new captain takes over these waters
         }
@@ -198,12 +239,13 @@ export function createVessels(waves, fx, fire) {
       } else if (v.struck) {
         // Colours struck: she lies to and waits. Left too long, she makes sail and slips away.
         speedWant = 0;
+        v.grace = Math.max(0, v.grace - dt);
         if ((v.struck -= dt) <= 0) { v.struck = 0; v.gone = true; v.away = rand(60, 110); }
         v.speed += (0 - v.speed) * Math.min(1, dt * 0.8);
       } else {
         v.alarm = Math.max(0, v.alarm - dt);
         v.provoked = Math.max(0, v.provoked - dt);
-        if ((v.think -= dt) <= 0) { v.think = 0.8; v.enemy = chooseEnemy(v, world); }
+        if ((v.think -= dt) <= 0) { v.think = 0.8; v.enemy = chooseEnemy(v, world); v.strikeAt = strikePoint(v, player); }
         if (v.enemy && (v.enemy.sinking || v.enemy.gone || v.enemy.struck)) v.enemy = null;
         v.assist = Math.max(0, v.assist - dt);
         if (v.raidZone && (v.raidFor -= dt) <= 0) v.raidZone = null;
@@ -271,7 +313,7 @@ export function createVessels(waves, fx, fire) {
   }
 
   return {
-    group, list, update, remove, raid,
+    group, list, update, remove, raid, strikePoint,
     fleet: () => list.filter((v) => v.fleet),
     // Add a ship to your fleet, painted in your colours, at a given place.
     addFleet(typeId, hull, look, at) {
@@ -297,7 +339,7 @@ export function createVessels(waves, fx, fire) {
       const al = Math.hypot(ax, az);
       let at = { x: zone.x + (ax / al) * zone.r * 0.9, z: zone.z + (az / al) * zone.r * 0.9 };
       if (islandCoast(at.x, at.z) > -0.9) at = openWater(player, 200, zone);
-      Object.assign(v, { x: at.x, z: at.z, heading: Math.atan2(player.x - at.x, player.z - at.z), lord: true, captain: lord.name, bounty: LORD_BOUNTY, label: 'Pirate lord’s galleon', tough: 1.3, aim: 1.8, power: 0.62 });
+      Object.assign(v, { x: at.x, z: at.z, heading: Math.atan2(player.x - at.x, player.z - at.z), lord: true, captain: lord.name, bounty: LORD_BOUNTY, label: 'Pirate lord’s galleon', tough: 1.3, aim: 1.8, power: 0.62, nerve: NERVES[2] });
       let slot = 0;
       for (const o of list) if (o !== v && o.faction === 'pirate' && o.zone === zone) { o.leader = v; o.slot = slot++; }
       return v;
