@@ -328,7 +328,8 @@ function updateDangers() {
       const nerve = near.nerve && !near.fleet && (near.assist > 0 || near.struck) ? ` · ${near.nerve.word}` : ''; // you learn her captain's mettle once you have fought her
       const text = near.struck ? who + ' · colours struck' : near.sinking ? who + ' · sinking' : who + nerve;
       if (tagName.textContent !== text) tagName.textContent = text;
-      drawBar(tagBar, near);
+      tagBar.hidden = !hurt(near); // no bar until she has taken a hit
+      if (!tagBar.hidden) drawBar(tagBar, near);
       vesselTag.classList.toggle('foe', near.enemy === me || near.faction === 'monster');
       vesselTag.style.transform = `translate(-50%, -100%) translate(${at.x}px, ${at.y}px)`;
     }
@@ -337,7 +338,7 @@ function updateDangers() {
   let used = 0;
   for (const v of close) {
     if (v === near || used >= 6) continue;
-    if (v.hull > 0.995 && v.enemy !== me && !(v.enemy && v.enemy.fleet) && !v.fleet) continue;
+    if (!hurt(v)) continue; // ships that have not been hit get no bar
     const at = screenAt(v);
     if (!at) continue;
     if (!miniBars[used]) { const b = mk('div', { className: 'mini-bar' }, mk('i'), mk('b')); labelBox.append(b); miniBars.push(b); }
@@ -349,6 +350,8 @@ function updateDangers() {
   }
   for (let i = used; i < miniBars.length; i++) miniBars[i].hidden = true;
 }
+// Has this ship been hit (or given up, or started to sink)? Only then is her hull bar shown.
+const hurt = (v) => v.hull < 0.995 || v.struck || v.sinking;
 // Where a ship's tag goes on the screen (above her masts), or null if she is out of sight.
 function screenAt(v) {
   vPos.set(v.x, v.y + v.top + 6, v.z).project(camera);
