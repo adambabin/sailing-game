@@ -20,14 +20,14 @@ Play it: https://adambabin.github.io/sailing-game/
 | Change the weather (testing) | `R` | In the pause menu |
 | Go ashore / visit a place / row back | `Enter` (or `E` on foot) | The yellow button |
 | Map and logbook | `M` | Map button |
-| Compass strip | `C` | Compass button |
-| Fire the port (left) / starboard (right) guns | `Q` / `E` (or `1` / `2`) | The two Fire buttons |
+| Compass strip | `C` | Compass button (in the pause menu on touch screens) |
+| Fire the port (left) / starboard (right) guns | `Q` / `E` (or `1` / `2`) | The two Fire buttons (on touch screens they appear only when another ship is near or in pirate waters) |
 | Fish: cast, strike, hold to reel in | `F` | Hook button |
 | Stand at the wheel / view from astern | `V` | View button |
 | Try the next ship (testing) | `B` | In the pause menu |
 | Sound / no music / muted | `N` | In the pause menu |
 | Graphics: light (smoother on phones) or full | | In the pause menu |
-| Start a new voyage (erases progress, asks twice) | | Reset button |
+| Start a new voyage (erases progress, asks twice) | | Reset button (in the pause menu on touch screens) |
 | Pause | `Esc` | II button |
 
 The dial in the corner shows where the wind is coming from relative to your

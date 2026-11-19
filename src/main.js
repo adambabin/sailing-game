@@ -356,7 +356,7 @@ const hurt = (v) => v.hull < 0.995 || v.struck || v.sinking;
 function screenAt(v) {
   vPos.set(v.x, v.y + v.top + 6, v.z).project(camera);
   if (vPos.z > 1 || Math.abs(vPos.x) > 1.05 || Math.abs(vPos.y) > 1.05) return null;
-  return { x: ((vPos.x + 1) / 2) * window.innerWidth, y: ((1 - vPos.y) / 2) * window.innerHeight };
+  return { x: ((vPos.x + 1) / 2) * view.w, y: ((1 - vPos.y) / 2) * view.h };
 }
 // Fill a hull bar: green when sound, brass when hurt, red when near the end, and a white mark
 // at the point where she will strike her colours to you.
@@ -725,7 +725,10 @@ function backToShip() {
 
 // The one thing you can do right now, shown on the big button (and the E key).
 const stickHint = document.getElementById('stick-hint');
-const setPadLabels = (text) => (stickHint.textContent = text);
+// On touch screens the label fades once the joystick has been used for a few seconds, and
+// comes back for a moment whenever it changes (stepping ashore, say).
+let stickUsed = 0, stickHintFor = 0;
+const setPadLabels = (text) => { if (stickHint.textContent !== text) { stickHint.textContent = text; stickHintFor = 4; } };
 const KEEPER_ACTIONS = { tavern: 'Have a drink with ', market: 'Trade with ', shipwright: 'Talk ships with ' };
 const actionBtn = document.getElementById('action');
 let action = null, portNearby = null, beachNearby = null;
@@ -786,14 +789,14 @@ function updateLabels() {
     vPos.set(f.x, f.y, f.z).project(camera);
     findLabel.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
     findLabel.textContent = finds.isFound(f) ? f.kind.name : '?';
-    findLabel.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+    findLabel.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * view.w}px, ${((1 - vPos.y) / 2) * view.h}px)`;
   } else findLabel.hidden = true;
   labelEls.forEach((elm, i) => {
     const p = w.active && !places.isOpen && w.island.portInfo ? w.island.portInfo.places.find((x) => x.label === elm.textContent) : null;
     if (!p) { elm.hidden = true; return; }
     vPos.set(p.x, p.y, p.z).project(camera);
     elm.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
-    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * view.w}px, ${((1 - vPos.y) / 2) * view.h}px)`;
   });
   // Your own buildings, when you are ashore at home and fairly close.
   const atHome = w.active && !places.isOpen && w.island.name === save.home.port;
@@ -802,7 +805,7 @@ function updateLabels() {
     if (!d || Math.hypot(w.x - d.x, w.z - d.z) > 45) { elm.hidden = true; return; }
     vPos.set(d.x, d.y, d.z).project(camera);
     elm.hidden = vPos.z > 1 || Math.abs(vPos.x) > 1.1 || Math.abs(vPos.y) > 1.1;
-    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * window.innerWidth}px, ${((1 - vPos.y) / 2) * window.innerHeight}px)`;
+    elm.style.transform = `translate(-50%, -100%) translate(${((vPos.x + 1) / 2) * view.w}px, ${((1 - vPos.y) / 2) * view.h}px)`;
   });
 }
 
@@ -1065,12 +1068,16 @@ function setPaused(on) {
     saveGame();
     pauseSound.textContent = 'Sound: ' + MODE_LABELS[audio.mode];
     pauseNote.textContent = '';
+    pauseCompass.textContent = 'Compass: ' + (compassOn ? 'shown' : 'hidden');
   }
 }
 document.getElementById('pausebtn').addEventListener('click', () => setPaused(true));
 document.getElementById('pause-resume').addEventListener('click', () => setPaused(false));
 document.getElementById('pause-map').addEventListener('click', () => { setPaused(false); if (!chart.isOpen) toggleChart(); });
 document.getElementById('pause-help').addEventListener('click', () => { pauseEl.hidden = true; help.hidden = false; });
+// The compass and starting over are here too, because phones leave them off the top bar.
+const pauseCompass = document.getElementById('pause-compass');
+pauseCompass.addEventListener('click', () => { toggleCompass(); pauseCompass.textContent = 'Compass: ' + (compassOn ? 'shown' : 'hidden'); });
 const detailBtn = document.getElementById('pause-detail');
 detailBtn.textContent = LIGHT ? 'Graphics: light (smoother)' : 'Graphics: full';
 detailBtn.addEventListener('click', () => {
@@ -1116,6 +1123,7 @@ function resetButton(btn, sureText) {
 }
 resetButton(document.getElementById('new-voyage'), 'Really start over? Coins, cargo and chart will be lost');
 resetButton(document.getElementById('tool-reset'), 'Erase everything?');
+resetButton(document.getElementById('pause-reset'), 'Really start over? Tap again');
 document.getElementById('helpbtn').addEventListener('click', () => { help.hidden = !help.hidden; });
 
 // ---- Camera: follows behind the ship; drag to look around, scroll or pinch to zoom
@@ -1187,8 +1195,9 @@ function updateCamera(dt, time, snap) {
 
 // ---- On-screen display -----------------------------------------------------------
 const el = (id) => document.getElementById(id);
+const view = { w: window.innerWidth, h: window.innerHeight }; // the size of the picture (set by resize())
 const gSpeed = el('g-speed'), gHeading = el('g-heading'), gSail = el('g-sail'), gWind = el('g-wind'), gWindName = el('g-windname'), gTime = el('g-time');
-const dialWind = el('dial-wind'), toast = el('toast'), hint = el('hint');
+const dialLabel = el('dial-label'), dialWind = el('dial-wind'), toast = el('toast'), hint = el('hint');
 const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 let toastTimer = 0;
 function showToast(text, seconds = 3.2) {
@@ -1206,6 +1215,7 @@ function updateHud(dt) {
   gHeading.textContent = POINTS[Math.round(deg / 45) % 8] + ' ' + String(Math.round(deg) % 360).padStart(3, '0') + '°';
   gSail.textContent = Math.round(s.sail * 100);
   gWind.textContent = Math.round(wind.speed);
+  if (touchScreen) { const t = Math.round(wind.speed) + ' kn'; if (dialLabel.textContent !== t) dialLabel.textContent = t; } // phones show the wind's strength on the dial instead
   gTime.textContent = env.clock();
   const name = env.windName();
   if (name !== gWindName.textContent) {
@@ -1254,8 +1264,20 @@ function updateHud(dt) {
 }
 
 // ---- Game loop -------------------------------------------------------------------
+// The size of the picture. Usually the window, but an iPhone running the game from the home
+// screen sometimes gives the page less height than the screen and leaves a dark strip at the
+// bottom; then the picture is stretched over the strip (see --lift in index.html).
 function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = window.innerWidth;
+  let lift = 0;
+  if (navigator.standalone && w < window.innerHeight) {
+    const full = Math.max(screen.width, screen.height); // an iPhone's whole screen, upright
+    if (full - window.innerHeight > 0 && full - window.innerHeight < 120) lift = full - window.innerHeight;
+  }
+  document.documentElement.style.setProperty('--lift', lift + 'px');
+  const h = window.innerHeight + lift;
+  view.w = w;
+  view.h = h;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.fov = w < h ? 68 : 55; // wider view when held upright on a phone
@@ -1271,6 +1293,11 @@ function frame() {
   // Paused: nothing moves. The picture is still drawn so the screen does not go blank.
   if (paused) { renderer.render(scene, camera); requestAnimationFrame(frame); return; }
   time += dt;
+  if (touchScreen) {
+    if (Math.hypot(stick.x, stick.y) > 0.3) stickUsed += dt;
+    stickHintFor = Math.max(0, stickHintFor - dt);
+    stickHint.classList.toggle('quiet', stickUsed > 3 && stickHintFor <= 0);
+  }
   updateStorms(dt, time);
   env.update(dt, time);
   updateWind(time);
@@ -1327,9 +1354,15 @@ function frame() {
   placeCrew(time);
   updateFishing(dt, time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
+  // On a touch screen they are put away while there is nothing within reach to fire at.
+  const foes = [...vessels.list, ...(creatures.legend ? [creatures.legend] : [])];
+  const idle = !zoneAt(ship.state.x, ship.state.z) && me.reload.port <= 0 && me.reload.stbd <= 0 &&
+    !foes.some((v) => !v.sinking && !v.gone && !v.fleet && Math.hypot(v.x - ship.state.x, v.z - ship.state.z) < 320);
+  firePort.classList.toggle('idle', idle);
+  fireStbd.classList.toggle('idle', idle);
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
     btn.style.setProperty('--load', (me.reload[key] / me.reloadTime).toFixed(3));
-    btn.classList.toggle('aim', me.reload[key] <= 0 && [...vessels.list, ...(creatures.legend ? [creatures.legend] : [])].some((v) => !v.sinking && !v.gone && inArc(me, side, v)));
+    btn.classList.toggle('aim', me.reload[key] <= 0 && foes.some((v) => !v.sinking && !v.gone && inArc(me, side, v)));
   }
   hullFill.style.width = Math.round(ship.state.hull * 100) + '%';
   hullFill.className = ship.state.hull < 0.3 ? 'grave' : ship.state.hull < 0.6 ? 'hurt' : '';
