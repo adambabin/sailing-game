@@ -1264,18 +1264,9 @@ function updateHud(dt) {
 }
 
 // ---- Game loop -------------------------------------------------------------------
-// The size of the picture. Usually the window, but an iPhone running the game from the home
-// screen sometimes gives the page less height than the screen and leaves a dark strip at the
-// bottom; then the picture is stretched over the strip (see --lift in index.html).
+// The size of the picture: the whole window.
 function resize() {
-  const w = window.innerWidth;
-  let lift = 0;
-  if (navigator.standalone && w < window.innerHeight) {
-    const full = Math.max(screen.width, screen.height); // an iPhone's whole screen, upright
-    if (full - window.innerHeight > 0 && full - window.innerHeight < 120) lift = full - window.innerHeight;
-  }
-  document.documentElement.style.setProperty('--lift', lift + 'px');
-  const h = window.innerHeight + lift;
+  const w = window.innerWidth, h = window.innerHeight;
   view.w = w;
   view.h = h;
   renderer.setSize(w, h, false);
@@ -1354,12 +1345,7 @@ function frame() {
   placeCrew(time);
   updateFishing(dt, time);
   // Fire buttons: show the reload, and light up when someone is in the guns' arc.
-  // On a touch screen they are put away while there is nothing within reach to fire at.
   const foes = [...vessels.list, ...(creatures.legend ? [creatures.legend] : [])];
-  const idle = !zoneAt(ship.state.x, ship.state.z) && me.reload.port <= 0 && me.reload.stbd <= 0 &&
-    !foes.some((v) => !v.sinking && !v.gone && !v.fleet && Math.hypot(v.x - ship.state.x, v.z - ship.state.z) < 320);
-  firePort.classList.toggle('idle', idle);
-  fireStbd.classList.toggle('idle', idle);
   for (const [btn, side, key] of [[firePort, 1, 'port'], [fireStbd, -1, 'stbd']]) {
     btn.style.setProperty('--load', (me.reload[key] / me.reloadTime).toFixed(3));
     btn.classList.toggle('aim', me.reload[key] <= 0 && foes.some((v) => !v.sinking && !v.gone && inArc(me, side, v)));

@@ -8,7 +8,9 @@
 <meta name="theme-color" content="#10283a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- "black", not "black-translucent": on recent iPhones the see-through status bar made a game
+     opened from the home screen a status bar's height too short, leaving a dark strip at the bottom. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Sail Away">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2310283a'/%3E%3Cpath d='M33 10 L33 44 L14 44 Z' fill='%23f6ecd2'/%3E%3Cpath d='M36 16 L36 44 L50 44 Z' fill='%23f0c05a'/%3E%3Cpath d='M10 48 H54 L48 55 H16 Z' fill='%23d9453c'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Nunito+Sans:wght@500;700;800&display=swap">
@@ -33,11 +35,7 @@
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { background: var(--ink); color: var(--paper); font-family: var(--body); font-size: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
-/* --lift: on some iPhones a game saved to the home screen is given a page shorter than the
-   screen, leaving a dark strip at the bottom. main.js measures the strip and stores it here;
-   the sea is stretched down over it and the bottom controls move down with it. */
-#sea { position: fixed; top: 0; left: 0; width: 100%; height: calc(100% + var(--lift, 0px)); display: block; }
-#help, #pause { bottom: calc(0px - var(--lift, 0px)) !important; }
+#sea { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 
 #gauges { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: var(--gap-l); display: flex; gap: 14px; padding: 8px 14px; font-variant-numeric: tabular-nums; }
@@ -103,13 +101,13 @@ body.touch .sheet-foot { display: block; }
 #chart-maps { margin-bottom: 12px; }
 #chart-maps:empty { display: none; }
 .treasure-map { display: block; width: 100%; max-width: 280px; aspect-ratio: 1; margin: 0 auto 10px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
-#action { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(26px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); z-index: 3; max-width: calc(100vw - 300px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); }
+#action { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 3; max-width: calc(100vw - 300px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); }
 .place-label { position: fixed; top: 0; left: 0; padding: 3px 10px; border-radius: 7px; background: var(--panel); border: 1px solid var(--line); font-family: var(--display); font-size: 17px; pointer-events: none; white-space: nowrap; }
 .ashore #btn-anchor, .ashore #dial, .ashore .fire, .ashore #btn-fish { display: none; }
 .pad #btn-fish.aim { border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass); background: var(--brass); color: var(--ink); }
 .pad #btn-fish.aim small { color: var(--ink); }
 #btn-fish, #btn-fish * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
-#reel { position: fixed; right: var(--gap-r); bottom: calc(90px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); width: 210px; padding: 8px 12px; z-index: 3; pointer-events: none; }
+#reel { position: fixed; right: var(--gap-r); bottom: calc(90px + env(safe-area-inset-bottom, 0px)); width: 210px; padding: 8px 12px; z-index: 3; pointer-events: none; }
 .reel-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .reel-row small { width: 30px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .reel-bar { position: relative; flex: 1; height: 10px; border-radius: 5px; background: rgba(246, 236, 210, 0.15); overflow: hidden; }
@@ -151,14 +149,14 @@ body.touch .sheet-foot { display: block; }
 #toast { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 8px 18px; font-family: var(--display); font-size: 20px; text-align: center; max-width: min(80vw, 420px); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
 #toast.show { opacity: 1; }
 body.compass-on #toast { top: calc(108px + env(safe-area-inset-top, 0px)); }
-#hint { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); left: 50%; transform: translateX(-50%); padding: 7px 14px; font-weight: 700; text-align: center; max-width: 80vw; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+#hint { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); padding: 7px 14px; font-weight: 700; text-align: center; max-width: 80vw; opacity: 0; transition: opacity 0.4s; pointer-events: none; }
 #hint.show { opacity: 1; }
 #hint.warn { color: var(--coral); }
 
-.pad { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); display: flex; gap: 10px; align-items: flex-end; }
-#stick { position: fixed; left: var(--gap-l); bottom: calc(30px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); width: 128px; height: 128px; border-radius: 50%; touch-action: none; cursor: grab; }
+.pad { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 10px; align-items: flex-end; }
+#stick { position: fixed; left: var(--gap-l); bottom: calc(30px + env(safe-area-inset-bottom, 0px)); width: 128px; height: 128px; border-radius: 50%; touch-action: none; cursor: grab; }
 #stick-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: var(--paper); opacity: 0.88; pointer-events: none; }
-#stick-hint { position: fixed; left: var(--gap-l); width: 128px; bottom: calc(10px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); text-align: center; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper); opacity: 0.75; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+#stick-hint { position: fixed; left: var(--gap-l); width: 128px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper); opacity: 0.75; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 #pad-right { right: var(--gap-r); }
 .pad button { width: 60px; height: 60px; border-radius: 50%; font-size: 22px; display: grid; place-items: center; }
 .pad button small { display: block; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: -4px; }
@@ -179,10 +177,8 @@ body.touch #help .keys-only, body:not(.touch) #help .touch-only { display: none;
   #topright #helpbtn, #topright #pausebtn { width: 42px; height: 42px; }
 }
 /* Touch screens: a tidier screen. Compass, Reset and help live in the pause menu, the wind's
-   strength is written on the wind dial, the fire buttons only appear when there is something
-   to shoot at, and the joystick's label fades once you have used it. */
+   strength is written on the wind dial, and the joystick's label fades once you have used it. */
 body.touch #tool-compass, body.touch #tool-reset, body.touch #helpbtn, body.touch #g-windbox { display: none; }
-body.touch .pad .fire.idle { display: none; }
 body.touch #stick-hint { transition: opacity 0.8s; }
 body.touch #stick-hint.quiet { opacity: 0; }
 .sheet, #pause .card { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
@@ -215,20 +211,31 @@ body.touch #stick-hint.quiet { opacity: 0; }
   #dial small { font-size: 9px; }
   .swatches button { width: 36px; height: 36px; }
   .trade-row button, .close { min-height: 38px; }
-  #topright { top: calc(64px + env(safe-area-inset-top, 0px)); }
-  #chips { top: calc(112px + env(safe-area-inset-top, 0px)); }
-  #compass { top: calc(112px + env(safe-area-inset-top, 0px)); left: var(--gap-l); transform: none; width: calc(100vw - 170px); }
-  body.compass-on #chips { top: calc(154px + env(safe-area-inset-top, 0px)); }
-  body.compass-on #toast { top: calc(200px + env(safe-area-inset-top, 0px)); }
-  #action { bottom: calc(206px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); max-width: calc(100vw - 32px); }
+  /* Upright phone: the instruments across the top left, and one tidy column down the right:
+     pause, the wind dial, then Map and View as round buttons like the ones at the bottom. */
+  #topright { top: calc(12px + env(safe-area-inset-top, 0px)); gap: 8px; }
+  #topright > div:first-child { display: contents !important; }
+  #pausebtn { order: 1; }
+  #dial { order: 2; }
+  #tools { order: 3; flex-direction: column; flex-wrap: nowrap; gap: 8px; padding: 0; background: none; border: none; backdrop-filter: none; -webkit-backdrop-filter: none; max-width: none; }
+  #tools button { width: 56px; height: 56px; min-height: 0; padding: 0; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+  #tools button::before { content: ''; width: 20px; height: 20px; background: currentColor; -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+  #tool-chart { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'%3E%3Cpath d='M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14'/%3E%3C/svg%3E"); }
+  #tool-view { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
+  #chips { top: calc(70px + env(safe-area-inset-top, 0px)); }
+  #compass { top: calc(70px + env(safe-area-inset-top, 0px)); left: var(--gap-l); transform: none; width: calc(100vw - 140px); }
+  body.compass-on #chips { top: calc(112px + env(safe-area-inset-top, 0px)); }
+  #action { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
   /* Four round buttons do not fit beside the joystick on a phone, so they sit two by two. */
   #pad-right { display: grid; grid-template-columns: 60px 60px; gap: 10px; }
-  #hint { bottom: calc(162px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); }
-  #reel { bottom: calc(206px + env(safe-area-inset-bottom, 0px) - var(--lift, 0px)); right: 50%; transform: translateX(50%); }
+  #hint { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
+  #reel { bottom: calc(206px + env(safe-area-inset-bottom, 0px)); right: 50%; transform: translateX(50%); }
   /* On a phone a menu fills the screen, between the notch and the home bar. */
   .sheet { max-height: calc(100% - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); top: calc(50% + (env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) / 2); }
   /* Notices sit below the wind dial so it never hides them. */
-  #toast, body.compass-on #toast { top: calc(232px + env(safe-area-inset-top, 0px)); font-size: 18px; max-width: calc(100vw - 32px); }
+  /* Notices sit in the open space left of the right-hand column, below the instruments. */
+  #toast { top: calc(150px + env(safe-area-inset-top, 0px)); left: var(--gap-l); right: calc(var(--gap-r) + 100px); transform: none; font-size: 18px; max-width: none; }
+  body.compass-on #toast { top: calc(192px + env(safe-area-inset-top, 0px)); }
 }
 /* A phone held sideways: little height, so screens use nearly all of it, and the pause menu goes in two columns. */
 @media (max-height: 520px) and (orientation: landscape) {
@@ -345,7 +352,7 @@ body.touch #stick-hint.quiet { opacity: 0; }
       <dt>Yellow button</dt><dd>Whatever you can do right now: go ashore, visit a place, row back, board a ship</dd>
       <dt>&#9875; Anchor</dt><dd>Drop or weigh anchor</dd>
       <dt>Hook</dt><dd>Fish: tap to cast, tap when it bites, then hold to reel in</dd>
-      <dt>&#9664; &#9654; Fire</dt><dd>Fire the left or right guns (these appear when another ship is near, or in pirate waters)</dd>
+      <dt>&#9664; &#9654; Fire</dt><dd>Fire the left or right guns</dd>
       <dt>Drag, pinch</dt><dd>Look around and zoom</dd>
       <dt>Map, View</dt><dd>Chart and logbook, and the view from the wheel</dd>
       <dt>II</dt><dd>Pause: these controls, sound, the compass strip, starting a new voyage, and the testing tools</dd>
